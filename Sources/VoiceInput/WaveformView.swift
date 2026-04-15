@@ -137,8 +137,8 @@ final class WaveformView: NSView {
         let totalWidth = CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * barSpacing
         let startX = (bounds.width - totalWidth) / 2
 
-        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        let baseColor: NSColor = isDark ? .white : NSColor(white: 0.12, alpha: 1.0)
+        // labelColor 自动适配深浅色及玻璃/毛玻璃背景
+        let baseColor: NSColor = .labelColor
 
         for i in 0..<barCount {
             let h = barHeights[i]
