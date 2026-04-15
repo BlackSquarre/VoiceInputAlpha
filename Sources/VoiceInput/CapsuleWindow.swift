@@ -60,7 +60,7 @@ final class CapsuleWindowController {
         label.translatesAutoresizingMaskIntoConstraints = false
         label.font = .systemFont(ofSize: 13.5, weight: .medium)
         label.textColor = .labelColor
-        label.lineBreakMode = .byTruncatingTail
+        label.lineBreakMode = .byTruncatingHead
         label.maximumNumberOfLines = 1
         label.cell?.truncatesLastVisibleLine = true
         container.addSubview(label)

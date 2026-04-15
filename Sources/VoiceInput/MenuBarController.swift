@@ -22,17 +22,16 @@ final class MenuBarController {
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-
         if let button = statusItem.button {
             button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "语音输入")
         }
-
         rebuildMenu()
     }
 
     private func rebuildMenu() {
         let menu = NSMenu()
 
+        // 标题
         let titleItem = NSMenuItem(title: "语音输入", action: nil, keyEquivalent: "")
         titleItem.isEnabled = false
         menu.addItem(titleItem)
@@ -45,9 +44,9 @@ final class MenuBarController {
 
         // 识别语言
         let langItem = NSMenuItem(title: "识别语言", action: nil, keyEquivalent: "")
+        langItem.image = icon("globe")
         let langMenu = NSMenu()
         let currentLang = UserDefaults.standard.string(forKey: "selectedLanguage") ?? "zh-CN"
-
         for lang in languages {
             let item = NSMenuItem(title: lang.name, action: #selector(selectLanguage(_:)), keyEquivalent: "")
             item.target = self
@@ -62,6 +61,7 @@ final class MenuBarController {
 
         // 动画效果
         let animItem = NSMenuItem(title: "动画效果", action: nil, keyEquivalent: "")
+        animItem.image = icon("sparkles")
         let animMenu = NSMenu()
         let currentAnim = UserDefaults.standard.string(forKey: "animationStyle") ?? "dynamicIsland"
 
@@ -82,20 +82,18 @@ final class MenuBarController {
 
         // 自动标点
         let punctEnabled = UserDefaults.standard.bool(forKey: "autoPunctuationEnabled")
-        let punctItem = NSMenuItem(
-            title: "自动补全标点",
-            action: #selector(togglePunctuation(_:)),
-            keyEquivalent: ""
-        )
+        let punctItem = NSMenuItem(title: "自动补全标点", action: #selector(togglePunctuation(_:)), keyEquivalent: "")
+        punctItem.image = icon("text.badge.plus")
         punctItem.target = self
         punctItem.state = punctEnabled ? .on : .off
         menu.addItem(punctItem)
 
         // LLM 优化
         let llmItem = NSMenuItem(title: "LLM 文本优化", action: nil, keyEquivalent: "")
+        llmItem.image = icon("wand.and.stars")
         let llmMenu = NSMenu()
-
         let llmEnabled = UserDefaults.standard.bool(forKey: "llmEnabled")
+
         let toggleItem = NSMenuItem(
             title: llmEnabled ? "已启用" : "已禁用",
             action: #selector(toggleLLM(_:)),
@@ -108,6 +106,7 @@ final class MenuBarController {
         llmMenu.addItem(.separator())
 
         let settingsItem = NSMenuItem(title: "设置...", action: #selector(openSettings(_:)), keyEquivalent: "")
+        settingsItem.image = icon("gear")
         settingsItem.target = self
         llmMenu.addItem(settingsItem)
 
@@ -117,11 +116,20 @@ final class MenuBarController {
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(title: "退出语音输入", action: #selector(quit(_:)), keyEquivalent: "q")
+        quitItem.image = icon("power")
         quitItem.target = self
         menu.addItem(quitItem)
 
         statusItem.menu = menu
     }
+
+    // MARK: - Helpers
+
+    private func icon(_ name: String) -> NSImage? {
+        NSImage(systemSymbolName: name, accessibilityDescription: nil)
+    }
+
+    // MARK: - Actions
 
     @objc private func selectLanguage(_ sender: NSMenuItem) {
         guard let code = sender.representedObject as? String else { return }
@@ -169,7 +177,6 @@ final class MenuBarController {
         if alert.runModal() == .alertFirstButtonReturn {
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         }
-        // 恢复正常图标
         statusItem.button?.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "语音输入")
     }
 }
