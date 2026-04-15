@@ -52,6 +52,11 @@ final class WaveformView: NSView {
         needsDisplay = true
     }
 
+    func restartAnimating() {
+        guard !isAnimating else { return }
+        startAnimating()
+    }
+
     private func startAnimating() {
         isAnimating = true
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in

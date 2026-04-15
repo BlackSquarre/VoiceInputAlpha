@@ -1,0 +1,2 @@
+NSMicrophoneUsageDescription = "VoiceInput needs microphone access to transcribe your speech.";
+NSSpeechRecognitionUsageDescription = "VoiceInput uses speech recognition to convert your voice to text.";

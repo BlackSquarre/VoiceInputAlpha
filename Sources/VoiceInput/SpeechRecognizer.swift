@@ -55,7 +55,8 @@ final class SpeechRecognizerController {
 
     func stop() -> String {
         recognitionRequest?.endAudio()
-        recognitionTask?.cancel()
+        // 用 finish 而非 cancel，确保最后一帧 partial result 能被收到
+        recognitionTask?.finish()
         recognitionTask = nil
         recognitionRequest = nil
         onResult = nil

@@ -132,4 +132,18 @@ final class MenuBarController {
     @objc private func quit(_ sender: NSMenuItem) {
         NSApp.terminate(nil)
     }
+
+    func showAccessibilityWarning() {
+        statusItem.button?.image = NSImage(systemSymbolName: "mic.slash.fill", accessibilityDescription: "辅助功能权限丢失")
+        let alert = NSAlert()
+        alert.messageText = "辅助功能权限已失效"
+        alert.informativeText = "请前往系统设置 > 隐私与安全性 > 辅助功能，移除并重新添加语音输入。"
+        alert.addButton(withTitle: "打开系统设置")
+        alert.addButton(withTitle: "忽略")
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        }
+        // 恢复正常图标
+        statusItem.button?.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "语音输入")
+    }
 }

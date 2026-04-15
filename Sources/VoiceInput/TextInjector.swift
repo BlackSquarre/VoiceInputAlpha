@@ -25,12 +25,14 @@ final class TextInjector {
             simulatePaste()
 
             // Restore input source after paste
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            // 粘贴延迟：给目标 App（含 Electron 等慢应用）足够时间完成粘贴
+            let pasteDelay: Double = 0.25
+            DispatchQueue.main.asyncAfter(deadline: .now() + pasteDelay) {
                 if needsSwitch {
                     TISSelectInputSource(originalSource)
                 }
-                // Restore clipboard
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                // 再等一帧后恢复剪贴板，确保输入法恢复不影响粘贴
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     self.restorePasteboard(pasteboard, contents: previousContents)
                 }
             }

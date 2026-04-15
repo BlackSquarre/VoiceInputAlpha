@@ -8,7 +8,7 @@ let package = Package(
         .executableTarget(
             name: "VoiceInput",
             path: "Sources/VoiceInput",
-            exclude: ["Info.plist"],
+            exclude: ["Info.plist", "AppIcon.icns"],
             linkerSettings: [
                 .unsafeFlags([
                     "-Xlinker", "-sectcreate",

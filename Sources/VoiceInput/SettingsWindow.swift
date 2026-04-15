@@ -5,6 +5,7 @@ final class SettingsWindowController {
     private var apiBaseURLField: NSTextField!
     private var apiKeyField: NSSecureTextField!
     private var modelField: NSTextField!
+    private var delayField: NSTextField!
     private var statusLabel: NSTextField!
     private let llmRefiner: LLMRefiner
 
@@ -14,13 +15,15 @@ final class SettingsWindowController {
 
     func showWindow() {
         if let window = window {
+            // 每次打开都刷新字段为最新值
+            refreshFields()
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 280),
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 330),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -34,15 +37,15 @@ final class SettingsWindowController {
         window.contentView = contentView
 
         let padding: CGFloat = 20
-        let labelWidth: CGFloat = 100
+        let labelWidth: CGFloat = 120
         let fieldHeight: CGFloat = 24
-        var y: CGFloat = 230
+        var y: CGFloat = 280
 
         // API 地址
         let urlLabel = makeLabel("API 地址:", frame: NSRect(x: padding, y: y, width: labelWidth, height: fieldHeight))
         contentView.addSubview(urlLabel)
 
-        apiBaseURLField = NSTextField(frame: NSRect(x: padding + labelWidth + 8, y: y, width: 320, height: fieldHeight))
+        apiBaseURLField = NSTextField(frame: NSRect(x: padding + labelWidth + 8, y: y, width: 300, height: fieldHeight))
         apiBaseURLField.stringValue = UserDefaults.standard.string(forKey: "llmAPIBaseURL") ?? "https://api.openai.com/v1"
         apiBaseURLField.placeholderString = "https://api.openai.com/v1"
         contentView.addSubview(apiBaseURLField)
@@ -53,7 +56,7 @@ final class SettingsWindowController {
         let keyLabel = makeLabel("API 密钥:", frame: NSRect(x: padding, y: y, width: labelWidth, height: fieldHeight))
         contentView.addSubview(keyLabel)
 
-        apiKeyField = NSSecureTextField(frame: NSRect(x: padding + labelWidth + 8, y: y, width: 320, height: fieldHeight))
+        apiKeyField = NSSecureTextField(frame: NSRect(x: padding + labelWidth + 8, y: y, width: 300, height: fieldHeight))
         apiKeyField.stringValue = UserDefaults.standard.string(forKey: "llmAPIKey") ?? ""
         apiKeyField.placeholderString = "sk-..."
         contentView.addSubview(apiKeyField)
@@ -64,10 +67,28 @@ final class SettingsWindowController {
         let modelLabel = makeLabel("模型:", frame: NSRect(x: padding, y: y, width: labelWidth, height: fieldHeight))
         contentView.addSubview(modelLabel)
 
-        modelField = NSTextField(frame: NSRect(x: padding + labelWidth + 8, y: y, width: 320, height: fieldHeight))
+        modelField = NSTextField(frame: NSRect(x: padding + labelWidth + 8, y: y, width: 300, height: fieldHeight))
         modelField.stringValue = UserDefaults.standard.string(forKey: "llmModel") ?? "gpt-4o-mini"
         modelField.placeholderString = "gpt-4o-mini"
         contentView.addSubview(modelField)
+
+        y -= 40
+
+        // 结果展示延迟
+        let delayLabel = makeLabel("结果展示延迟:", frame: NSRect(x: padding, y: y, width: labelWidth, height: fieldHeight))
+        contentView.addSubview(delayLabel)
+
+        delayField = NSTextField(frame: NSRect(x: padding + labelWidth + 8, y: y, width: 60, height: fieldHeight))
+        let currentDelay = UserDefaults.standard.double(forKey: "llmResultDelay")
+        delayField.stringValue = String(format: "%.1f", currentDelay > 0 ? currentDelay : 0.3)
+        delayField.placeholderString = "0.3"
+        contentView.addSubview(delayField)
+
+        let unitLabel = NSTextField(labelWithString: "秒（LLM 返回后等待时间，0 为立即注入）")
+        unitLabel.frame = NSRect(x: padding + labelWidth + 8 + 68, y: y, width: 260, height: fieldHeight)
+        unitLabel.font = .systemFont(ofSize: 11)
+        unitLabel.textColor = .secondaryLabelColor
+        contentView.addSubview(unitLabel)
 
         y -= 50
 
@@ -101,6 +122,15 @@ final class SettingsWindowController {
         self.window = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func refreshFields() {
+        apiBaseURLField?.stringValue = UserDefaults.standard.string(forKey: "llmAPIBaseURL") ?? "https://api.openai.com/v1"
+        apiKeyField?.stringValue = UserDefaults.standard.string(forKey: "llmAPIKey") ?? ""
+        modelField?.stringValue = UserDefaults.standard.string(forKey: "llmModel") ?? "gpt-4o-mini"
+        let delay = UserDefaults.standard.double(forKey: "llmResultDelay")
+        delayField?.stringValue = String(format: "%.1f", delay > 0 ? delay : 0.3)
+        statusLabel?.stringValue = ""
     }
 
     private func makeLabel(_ text: String, frame: NSRect) -> NSTextField {
@@ -139,6 +169,11 @@ final class SettingsWindowController {
         UserDefaults.standard.set(apiBaseURLField.stringValue, forKey: "llmAPIBaseURL")
         UserDefaults.standard.set(apiKeyField.stringValue, forKey: "llmAPIKey")
         UserDefaults.standard.set(modelField.stringValue, forKey: "llmModel")
+
+        // 解析并保存延迟时间
+        let delayValue = Double(delayField.stringValue) ?? 0.3
+        UserDefaults.standard.set(max(0, delayValue), forKey: "llmResultDelay")
+
         statusLabel.stringValue = "已保存"
         statusLabel.textColor = .systemGreen
         window?.close()

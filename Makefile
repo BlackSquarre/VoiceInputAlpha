@@ -12,6 +12,8 @@ build:
 	mkdir -p "$(APP_BUNDLE)/Contents/Resources"
 	cp "$(BUILD_DIR)/$(APP_NAME)" "$(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)"
 	cp Sources/VoiceInput/Info.plist "$(APP_BUNDLE)/Contents/Info.plist"
+	cp Sources/VoiceInput/AppIcon.icns "$(APP_BUNDLE)/Contents/Resources/AppIcon.icns"
+	cp -R Resources/*.lproj "$(APP_BUNDLE)/Contents/Resources/"
 	codesign --force --sign - --entitlements VoiceInput.entitlements "$(APP_BUNDLE)"
 	@echo "Built: $(APP_BUNDLE)"
 

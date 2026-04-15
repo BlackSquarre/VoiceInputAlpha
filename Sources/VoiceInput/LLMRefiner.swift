@@ -38,7 +38,7 @@ final class LLMRefiner {
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 10
+        request.timeoutInterval = 5
 
         let body: [String: Any] = [
             "model": model,
@@ -47,14 +47,16 @@ final class LLMRefiner {
                 ["role": "user", "content": text],
             ],
             "temperature": 0.1,
-            "max_tokens": 2048,
+            "max_tokens": 1024,
         ]
 
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
+        let startTime = Date()
         URLSession.shared.dataTask(with: request) { data, response, error in
+            let elapsed = String(format: "%.2f", Date().timeIntervalSince(startTime))
             guard let data = data, error == nil else {
-                print("[LLMRefiner] Request failed: \(error?.localizedDescription ?? "unknown")")
+                print("[LLMRefiner] 请求失败(\(elapsed)s): \(error?.localizedDescription ?? "unknown")")
                 completion(nil)
                 return
             }
@@ -65,13 +67,14 @@ final class LLMRefiner {
                    let first = choices.first,
                    let message = first["message"] as? [String: Any],
                    let content = message["content"] as? String {
+                    print("[LLMRefiner] 完成(\(elapsed)s)")
                     completion(content.trimmingCharacters(in: .whitespacesAndNewlines))
                 } else {
-                    print("[LLMRefiner] Unexpected response format")
+                    print("[LLMRefiner] 响应格式异常(\(elapsed)s)")
                     completion(nil)
                 }
             } catch {
-                print("[LLMRefiner] JSON parse error: \(error)")
+                print("[LLMRefiner] JSON 解析错误(\(elapsed)s): \(error)")
                 completion(nil)
             }
         }.resume()

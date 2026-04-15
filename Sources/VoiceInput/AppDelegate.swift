@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "llmAPIBaseURL": "https://api.openai.com/v1",
             "llmModel": "gpt-4o-mini",
             "autoPunctuationEnabled": true,
+            "llmResultDelay": 0.3,
         ])
 
         requestPermissions()
@@ -40,6 +41,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onFnDown: { [weak self] in self?.startRecording() },
             onFnUp: { [weak self] in self?.stopRecording() }
         )
+        fnKeyMonitor.onTapDisabled = { [weak self] in
+            self?.menuBarController.showAccessibilityWarning()
+        }
         fnKeyMonitor.start()
     }
 
@@ -120,7 +124,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     DispatchQueue.main.async {
                         let finalText = refined ?? processedText
                         self?.capsuleWindow.updateText(finalText)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        let delay = UserDefaults.standard.double(forKey: "llmResultDelay")
+                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                             self?.capsuleWindow.dismiss {
                                 self?.textInjector.inject(text: finalText)
                             }
