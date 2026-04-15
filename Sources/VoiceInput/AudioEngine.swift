@@ -14,12 +14,14 @@ final class AudioEngineController {
     private var sampleBuffer: [Float] = []
 
     // 频段频率范围（Hz），根据实际采样率动态计算 bin 索引
+    // 设计目标：男声基频(85-180Hz)落在第2根，男声整体(200-1500Hz)集中在第2-3根
+    //          女声整体(300-3000Hz)集中在第3-4根，高频气声/齿音在第5根
     private let bandFreqRanges: [(Float, Float)] = [
-        (80,   300),   // 低频  — 胸腔共鸣/基频
-        (300,  800),   // 中低  — 元音基音
-        (800,  2500),  // 中频  — 语音主体
-        (2500, 5000),  // 中高  — 辅音清晰度
-        (5000, 10000), // 高频  — 齿音/气息
+        (50,   150),   // 第1根 — 超低频/次声，普通说话几乎不亮
+        (150,  600),   // 第2根 — 男声基频+低次谐波 (85-180Hz 基频+泛音)
+        (600,  2200),  // 第3根 — 语音核心共振峰 F1/F2，男女声均最密集
+        (2200, 5000),  // 第4根 — 女声上共振峰 F3/F4，辅音定义
+        (5000, 12000), // 第5根 — 齿音/气息/擦音
     ]
 
     init() {
@@ -117,7 +119,8 @@ final class AudioEngineController {
 
                 // 按频率范围切分频段，取均值后转 dB，映射到 0-1
                 let freqPerBin = sampleRate / Float(self.fftSize)
-                return self.bandFreqRanges.map { (loFreq, hiFreq) in
+                return self.bandFreqRanges.enumerated().map { (i, range) in
+                    let (loFreq, hiFreq) = range
                     let loIdx = max(1, Int(loFreq / freqPerBin))
                     let hiIdx = min(halfSize - 1, Int(hiFreq / freqPerBin))
                     guard loIdx < hiIdx else { return Float(0) }
@@ -125,9 +128,13 @@ final class AudioEngineController {
                     let slice = mags[loIdx...hiIdx]
                     let mean = slice.reduce(0, +) / Float(slice.count)
 
-                    // 对数映射：-70dB → 0，-10dB → 1（语音典型范围）
+                    // 对数映射：各频段使用不同灵敏度
+                    // 第1根（超低频）不需要太灵敏，中间三根最灵敏，第5根齿音偏高
                     let dB = 20.0 * log10(max(mean, 1e-7))
-                    let normalized = (dB + 70.0) / 60.0
+                    let floors: [Float] = [-50, -65, -68, -62, -55]
+                    let floor = i < floors.count ? floors[i] : -65
+                    let range: Float = 48
+                    let normalized = (dB - floor) / range
                     return max(0, min(1, normalized))
                 }
             }
