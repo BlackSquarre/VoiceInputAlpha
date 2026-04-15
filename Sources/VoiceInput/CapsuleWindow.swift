@@ -142,8 +142,8 @@ final class CapsuleWindowController {
         })
     }
 
-    func updateRMS(_ rms: Float) {
-        waveformView?.updateRMS(rms)
+    func updateBands(_ bands: [Float]) {
+        waveformView?.updateBands(bands)
     }
 
     func updateText(_ text: String) {

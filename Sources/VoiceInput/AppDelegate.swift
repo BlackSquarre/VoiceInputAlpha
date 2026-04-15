@@ -84,9 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             audioEngine.start(
-                rmsHandler: { [weak self] rms in
+                bandsHandler: { [weak self] bands in
                     DispatchQueue.main.async {
-                        self?.capsuleWindow.updateRMS(rms)
+                        self?.capsuleWindow.updateBands(bands)
                     }
                 },
                 recognitionRequest: request

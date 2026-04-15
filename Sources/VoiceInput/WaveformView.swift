@@ -3,33 +3,34 @@ import Cocoa
 final class WaveformView: NSView {
     // MARK: - Layout
     private let barCount = 5
-    private let barWidth: CGFloat = 3.5
+    private let barWidth: CGFloat  = 3.5
     private let barSpacing: CGFloat = 2.8
     private let minBarHeight: CGFloat = 3.0
     private let maxBarHeight: CGFloat = 26.0
 
-    // MARK: - 正弦波参数（每根竖条独立频率/相位，Apple Music 风格）
-    // 频率单位：弧度/秒，各竖条互质，避免周期对齐产生机械感
-    private let frequencies: [CGFloat] = [2.1, 3.4, 2.7, 4.1, 1.8]
-    // 初始相位错开，开场就不对称
-    private let phases: [CGFloat]      = [0.0, 1.2, 2.4, 0.7, 3.1]
-    // 各竖条对 RMS 的响应权重（中间高两侧低）
-    private let weights: [CGFloat]     = [0.55, 0.80, 1.0, 0.75, 0.50]
+    // MARK: - 正弦波参数
+    // 低频竖条（左）振荡慢，高频竖条（右）振荡快，与音频频段特性一致
+    private let oscFreqs: [CGFloat]  = [1.4, 2.2, 3.1, 4.6, 6.3]   // rad/s，从慢到快
+    private let initPhases: [CGFloat] = [0.0, 1.1, 2.3, 0.5, 3.0]  // 初始相位错开
 
     // MARK: - 状态
-    private var smoothedRMS: CGFloat = 0
-    private var displayTime: CGFloat = 0          // 累计时间（驱动正弦）
+    private var bandLevels: [CGFloat] = [0, 0, 0, 0, 0]   // 来自 FFT 的 5 个频段能量
+    private var smoothedLevels: [CGFloat] = [0, 0, 0, 0, 0]
     private var barHeights: [CGFloat]
+    private var displayTime: CGFloat = 0
     private var isAnimating = false
     private var timer: Timer?
     private var lastTickDate: Date = Date()
 
-    // MARK: - 平滑系数
-    private let attackCoeff: CGFloat  = 0.35      // RMS 上升速度
-    private let releaseCoeff: CGFloat = 0.08      // RMS 下降速度（慢）
+    // MARK: - 响应速度
+    // attack 快（说话时立刻响应），release 慢（有余韵感）
+    private let attackCoeff:  CGFloat = 0.80   // 快速上升
+    private let releaseCoeff: CGFloat = 0.12   // 缓慢下降
 
-    // MARK: - 待机呼吸幅度（无声时的最小摆动）
-    private let idleAmplitude: CGFloat = 0.06
+    // 待机呼吸幅度（无声时轻微摆动）
+    private let idleAmplitude: CGFloat = 0.05
+
+    // MARK: - Init
 
     override init(frame: NSRect) {
         barHeights = Array(repeating: 3.0, count: 5)
@@ -47,12 +48,29 @@ final class WaveformView: NSView {
 
     // MARK: - Public
 
+    /// 接收来自 AudioEngine FFT 的 5 频段能量（0-1）
+    func updateBands(_ bands: [Float]) {
+        for i in 0..<min(bands.count, barCount) {
+            let target = CGFloat(bands[i])
+            let current = bandLevels[i]
+            if target > current {
+                bandLevels[i] += (target - current) * attackCoeff
+            } else {
+                bandLevels[i] += (target - current) * releaseCoeff
+            }
+        }
+    }
+
+    /// 兼容旧的 RMS 接口（全频段同等驱动）
     func updateRMS(_ rms: Float) {
-        let target = CGFloat(rms)
-        if target > smoothedRMS {
-            smoothedRMS += (target - smoothedRMS) * attackCoeff
-        } else {
-            smoothedRMS += (target - smoothedRMS) * releaseCoeff
+        let level = CGFloat(rms)
+        for i in 0..<barCount {
+            let current = bandLevels[i]
+            if level > current {
+                bandLevels[i] += (level - current) * attackCoeff
+            } else {
+                bandLevels[i] += (level - current) * releaseCoeff
+            }
         }
     }
 
@@ -60,7 +78,8 @@ final class WaveformView: NSView {
         isAnimating = false
         timer?.invalidate()
         timer = nil
-        smoothedRMS = 0
+        bandLevels     = [0, 0, 0, 0, 0]
+        smoothedLevels = [0, 0, 0, 0, 0]
         displayTime = 0
         for i in 0..<barCount { barHeights[i] = minBarHeight }
         needsDisplay = true
@@ -76,7 +95,6 @@ final class WaveformView: NSView {
     private func startAnimating() {
         isAnimating = true
         lastTickDate = Date()
-        // 用 RunLoop 的 common modes 确保拖拽等场景也能更新
         timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             guard let self, self.isAnimating else { return }
             self.tick()
@@ -91,17 +109,18 @@ final class WaveformView: NSView {
         displayTime += dt
 
         for i in 0..<barCount {
-            // 正弦波（带相位）产生有机摆动
-            let sine = sin(displayTime * frequencies[i] + phases[i])  // -1…1
+            // 正弦波产生有机摆动
+            let sine = sin(displayTime * oscFreqs[i] + initPhases[i])  // -1…1
+            let level = bandLevels[i]
 
-            // 有声时：RMS 驱动振幅 + 竖条权重；无声时：轻微待机呼吸
-            let amplitude = smoothedRMS * weights[i] + idleAmplitude
-            let normalizedHeight = amplitude * (0.5 + 0.5 * sine)     // 0…amplitude
+            // 振幅 = 实际频段能量 + 待机呼吸
+            // 高度 = 基础 + 振幅 * (0.5 + 0.5*sine) 使高度始终 ≥ 基础
+            let amplitude = level + idleAmplitude
+            let normalized = amplitude * (0.5 + 0.5 * sine)
+            let targetHeight = minBarHeight + (maxBarHeight - minBarHeight) * normalized
 
-            let targetHeight = minBarHeight + (maxBarHeight - minBarHeight) * normalizedHeight
-
-            // 每根竖条向目标高度平滑靠近（不直接跳变）
-            let coeff: CGFloat = targetHeight > barHeights[i] ? 0.25 : 0.18
+            // 竖条高度平滑追踪目标
+            let coeff: CGFloat = targetHeight > barHeights[i] ? 0.30 : 0.20
             barHeights[i] += (targetHeight - barHeights[i]) * coeff
             barHeights[i] = max(minBarHeight, min(maxBarHeight, barHeights[i]))
         }
@@ -128,8 +147,7 @@ final class WaveformView: NSView {
             let rect = CGRect(x: x, y: y, width: barWidth, height: h)
             let path = NSBezierPath(roundedRect: rect, xRadius: barWidth / 2, yRadius: barWidth / 2)
 
-            // 高度越大越不透明，低时略微淡化
-            let alpha: CGFloat = 0.55 + 0.45 * ((h - minBarHeight) / (maxBarHeight - minBarHeight))
+            let alpha: CGFloat = 0.5 + 0.5 * ((h - minBarHeight) / (maxBarHeight - minBarHeight))
             ctx.setFillColor(baseColor.withAlphaComponent(alpha).cgColor)
             path.fill()
         }
