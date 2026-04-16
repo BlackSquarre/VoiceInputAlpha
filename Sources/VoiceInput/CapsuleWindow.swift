@@ -243,13 +243,26 @@ final class CapsuleWindowController {
     private func animateInNone(panel: NSPanel, targetFrame: NSRect) {
         panel.setFrame(targetFrame, display: false)
         panel.alphaValue = 1
+        // 禁用系统自动淡入：duration=0 + disableActions
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        NSAnimationContext.beginGrouping()
+        NSAnimationContext.current.duration = 0
         panel.orderFrontRegardless()
+        NSAnimationContext.endGrouping()
+        CATransaction.commit()
     }
 
     // MARK: - 无动画退场
 
     private func dismissNone(panel: NSPanel, completion: (() -> Void)?) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        NSAnimationContext.beginGrouping()
+        NSAnimationContext.current.duration = 0
         panel.orderOut(nil)
+        NSAnimationContext.endGrouping()
+        CATransaction.commit()
         cleanup()
         completion?()
     }
