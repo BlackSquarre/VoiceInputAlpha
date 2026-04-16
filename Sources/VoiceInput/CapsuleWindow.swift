@@ -7,6 +7,7 @@ final class CapsuleWindowController {
     private var refiningLabel: NSTextField?
     private var contentView: NSView?
     private var springTimer: Timer?
+    private var shimmerLayer: CAGradientLayer?
 
     private let capsuleHeight: CGFloat = 50
     private let cornerRadius: CGFloat = 25
@@ -341,6 +342,57 @@ final class CapsuleWindowController {
         textLabel?.isHidden = true
         refiningLabel?.isHidden = false
         waveformView?.stopAnimating()
+        if let label = refiningLabel {
+            applyShimmer(to: label)
+        }
+    }
+
+    // MARK: - 扫光动画（仿 iOS 滑动解锁）
+
+    private func applyShimmer(to label: NSTextField) {
+        label.wantsLayer = true
+        label.textColor = .labelColor
+        label.superview?.layoutSubtreeIfNeeded()
+
+        // 根据文字内容测量宽高
+        let font = label.font ?? NSFont.systemFont(ofSize: 12)
+        let measured = (label.stringValue as NSString).size(withAttributes: [.font: font])
+        let w = max(measured.width + 6, 60)
+        let h = max(measured.height + 2, label.frame.height > 0 ? label.frame.height : 18)
+
+        // 扫光 gradient 作为 layer mask
+        // 白色 = 完全可见，灰色 = 半透明，形成亮斑扫过效果
+        let sl = CAGradientLayer()
+        sl.frame = CGRect(x: 0, y: 0, width: w, height: h)
+        sl.startPoint = CGPoint(x: 0, y: 0.5)
+        sl.endPoint   = CGPoint(x: 1, y: 0.5)
+        sl.colors = [
+            NSColor(white: 0.45, alpha: 1).cgColor,
+            NSColor(white: 0.45, alpha: 1).cgColor,
+            NSColor(white: 1.00, alpha: 1).cgColor,
+            NSColor(white: 0.45, alpha: 1).cgColor,
+            NSColor(white: 0.45, alpha: 1).cgColor,
+        ]
+        // 初始位置：亮斑在最左侧以外
+        sl.locations = [-0.6, -0.3, 0.0, 0.3, 0.6] as [NSNumber]
+
+        // 从左到右扫过，周期 1.6s
+        let anim = CABasicAnimation(keyPath: "locations")
+        anim.fromValue = [-0.6, -0.3, 0.0, 0.3, 0.6] as [NSNumber]
+        anim.toValue   = [ 0.4,  0.7, 1.0, 1.3, 1.6] as [NSNumber]
+        anim.duration  = 1.6
+        anim.repeatCount = .infinity
+        anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        sl.add(anim, forKey: "shimmer")
+
+        label.layer?.mask = sl
+        shimmerLayer = sl
+    }
+
+    private func stopShimmer() {
+        shimmerLayer?.removeAllAnimations()
+        refiningLabel?.layer?.mask = nil
+        shimmerLayer = nil
     }
 
     // MARK: - Dismiss
@@ -441,6 +493,7 @@ final class CapsuleWindowController {
     // MARK: - Cleanup
 
     private func cleanup() {
+        stopShimmer()
         springTimer?.invalidate()
         springTimer = nil
         waveformView?.stopAnimating()

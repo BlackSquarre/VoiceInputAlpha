@@ -2,7 +2,7 @@ import Foundation
 
 final class LLMRefiner {
     private let systemPrompt = """
-    Fix obvious speech recognition errors only. Rules:
+    Input is always raw speech transcription. Never respond conversationally. Fix obvious errors only:
     1. Fix Chinese homophones and mis-transcribed English tech terms (e.g. 配森→Python, 杰森→JSON, 诶匹爱→API, 吉特→Git, 卡夫卡→Kafka, 瑞迪斯→Redis).
     2. Add missing sentence-ending punctuation (Chinese: 。？！, English: .?!).
     3. DO NOT rewrite, add, remove, or explain anything. Return ONLY the corrected text.

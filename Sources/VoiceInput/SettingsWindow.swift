@@ -1,6 +1,6 @@
 import Cocoa
 
-// MARK: - 服务商数据模型
+// MARK: - 数据模型
 
 struct LLMProvider: Codable {
     var name: String
@@ -8,28 +8,25 @@ struct LLMProvider: Codable {
     var defaultModel: String
 }
 
-// MARK: - 服务商持久化
-
 final class ProviderStore {
     static let key = "llmProviders"
 
     static let defaults: [LLMProvider] = [
-        LLMProvider(name: "OpenAI",           baseURL: "https://api.openai.com/v1",                            defaultModel: "gpt-4o-mini"),
-        LLMProvider(name: "DeepSeek",         baseURL: "https://api.deepseek.com/v1",                          defaultModel: "deepseek-chat"),
-        LLMProvider(name: "Moonshot (Kimi)",  baseURL: "https://api.moonshot.cn/v1",                           defaultModel: "moonshot-v1-8k"),
-        LLMProvider(name: "阿里云百炼 (Qwen)", baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",    defaultModel: "qwen-turbo"),
-        LLMProvider(name: "智谱 AI (GLM)",    baseURL: "https://open.bigmodel.cn/api/paas/v4",                  defaultModel: "glm-4-flash"),
-        LLMProvider(name: "零一万物 (Yi)",     baseURL: "https://api.lingyiwanwu.com/v1",                        defaultModel: "yi-lightning"),
-        LLMProvider(name: "Groq",             baseURL: "https://api.groq.com/openai/v1",                        defaultModel: "llama-3.3-70b-versatile"),
-        LLMProvider(name: "Ollama (本地)",    baseURL: "http://localhost:11434/v1",                              defaultModel: "qwen2.5:1.5b"),
-        LLMProvider(name: "自定义",           baseURL: "",                                                       defaultModel: ""),
+        LLMProvider(name: "OpenAI",            baseURL: "https://api.openai.com/v1",                           defaultModel: "gpt-4o-mini"),
+        LLMProvider(name: "DeepSeek",          baseURL: "https://api.deepseek.com/v1",                         defaultModel: "deepseek-chat"),
+        LLMProvider(name: "Moonshot (Kimi)",   baseURL: "https://api.moonshot.cn/v1",                          defaultModel: "moonshot-v1-8k"),
+        LLMProvider(name: "阿里云百炼 (Qwen)", baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",   defaultModel: "qwen-turbo"),
+        LLMProvider(name: "智谱 AI (GLM)",     baseURL: "https://open.bigmodel.cn/api/paas/v4",                defaultModel: "glm-4-flash"),
+        LLMProvider(name: "零一万物 (Yi)",     baseURL: "https://api.lingyiwanwu.com/v1",                      defaultModel: "yi-lightning"),
+        LLMProvider(name: "Groq",              baseURL: "https://api.groq.com/openai/v1",                      defaultModel: "llama-3.3-70b-versatile"),
+        LLMProvider(name: "Ollama (本地)",     baseURL: "http://localhost:11434/v1",                           defaultModel: "qwen2.5:1.5b"),
+        LLMProvider(name: "自定义",            baseURL: "",                                                    defaultModel: ""),
     ]
 
     static func load() -> [LLMProvider] {
         guard let data = UserDefaults.standard.data(forKey: key),
-              let list = try? JSONDecoder().decode([LLMProvider].self, from: data) else {
-            return defaults
-        }
+              let list = try? JSONDecoder().decode([LLMProvider].self, from: data)
+        else { return defaults }
         return list
     }
 
@@ -40,15 +37,14 @@ final class ProviderStore {
     }
 }
 
-// MARK: - 服务商编辑器（Sheet）
+// MARK: - 服务商编辑器
 
-final class ProviderEditorController: NSObject, NSTableViewDataSource, NSTableViewDelegate {
+final class ProviderEditorController: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate {
     private var sheet: NSWindow!
     private var tableView: NSTableView!
     private var nameField: NSTextField!
     private var urlField: NSTextField!
     private var modelField: NSTextField!
-    private var deleteButton: NSButton!
     private var providers: [LLMProvider] = []
     var onDone: (([LLMProvider]) -> Void)?
 
@@ -60,98 +56,126 @@ final class ProviderEditorController: NSObject, NSTableViewDataSource, NSTableVi
 
     private func buildSheet() {
         sheet = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 380),
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 400),
             styleMask: [.titled],
             backing: .buffered,
             defer: false
         )
         sheet.title = "管理服务商"
-
         let cv = sheet.contentView!
-        let padding: CGFloat = 16
+        let p: CGFloat = 20
 
         // 表格
-        let scroll = NSScrollView(frame: NSRect(x: padding, y: 160, width: 488, height: 200))
+        let scroll = NSScrollView()
+        scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.hasVerticalScroller = true
         scroll.borderType = .bezelBorder
+        cv.addSubview(scroll)
 
         tableView = NSTableView()
         tableView.dataSource = self
         tableView.delegate = self
         tableView.rowHeight = 22
         tableView.usesAlternatingRowBackgroundColors = true
+        tableView.allowsMultipleSelection = false
 
-        for (id, title) in [("name","名称"), ("url","API 地址"), ("model","默认模型")] {
+        let cols: [(String, String, CGFloat)] = [
+            ("name", "名称", 110), ("url", "API 地址", 250), ("model", "默认模型", 140)
+        ]
+        for (id, title, w) in cols {
             let col = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(id))
-            col.title = title
-            col.isEditable = true
-            switch id {
-            case "name":  col.width = 110
-            case "url":   col.width = 240
-            default:      col.width = 120
-            }
+            col.title = title; col.width = w; col.isEditable = true
             tableView.addTableColumn(col)
         }
         scroll.documentView = tableView
-        cv.addSubview(scroll)
 
         // +/- 按钮
-        let addBtn = NSButton(title: "+", target: self, action: #selector(addProvider))
-        addBtn.frame = NSRect(x: padding, y: 128, width: 32, height: 26)
+        let addBtn = NSButton(title: "+", target: self, action: #selector(addRow))
+        addBtn.translatesAutoresizingMaskIntoConstraints = false
         addBtn.bezelStyle = .rounded
         cv.addSubview(addBtn)
 
-        deleteButton = NSButton(title: "−", target: self, action: #selector(deleteProvider))
-        deleteButton.frame = NSRect(x: padding + 36, y: 128, width: 32, height: 26)
-        deleteButton.bezelStyle = .rounded
-        cv.addSubview(deleteButton)
+        let delBtn = NSButton(title: "−", target: self, action: #selector(deleteRow))
+        delBtn.translatesAutoresizingMaskIntoConstraints = false
+        delBtn.bezelStyle = .rounded
+        cv.addSubview(delBtn)
 
-        // 分割线
-        let sep = NSBox(frame: NSRect(x: padding, y: 118, width: 488, height: 1))
+        // 编辑区
+        let sep = NSBox()
+        sep.translatesAutoresizingMaskIntoConstraints = false
         sep.boxType = .separator
         cv.addSubview(sep)
 
-        // 编辑区（点击行后填入）
-        let fh: CGFloat = 24
-        let lw: CGFloat = 60
-        let fx = padding + lw + 8
-        let fw: CGFloat = 420
+        let grid = NSGridView()
+        grid.translatesAutoresizingMaskIntoConstraints = false
+        grid.rowSpacing = 8
+        grid.columnSpacing = 8
+        cv.addSubview(grid)
 
-        func addRow(_ label: String, y: CGFloat) -> NSTextField {
+        nameField  = makeField(); urlField = makeField(); modelField = makeField()
+        nameField.delegate = self; urlField.delegate = self; modelField.delegate = self
+
+        for (label, field) in [("名称:", nameField!), ("地址:", urlField!), ("模型:", modelField!)] {
             let l = NSTextField(labelWithString: label)
-            l.frame = NSRect(x: padding, y: y, width: lw, height: fh)
             l.alignment = .right; l.font = .systemFont(ofSize: 12)
             l.textColor = .secondaryLabelColor
-            cv.addSubview(l)
-            let f = NSTextField(frame: NSRect(x: fx, y: y, width: fw, height: fh))
-            f.bezelStyle = .roundedBezel; f.font = .systemFont(ofSize: 12)
-            f.delegate = self as? NSTextFieldDelegate
-            cv.addSubview(f)
-            return f
+            grid.addRow(with: [l, field])
         }
-        nameField  = addRow("名称:", y: 84)
-        urlField   = addRow("地址:", y: 56)
-        modelField = addRow("模型:", y: 28)
-
-        nameField.target  = self; nameField.action  = #selector(fieldEdited(_:))
-        urlField.target   = self; urlField.action   = #selector(fieldEdited(_:))
-        modelField.target = self; modelField.action = #selector(fieldEdited(_:))
+        grid.column(at: 0).xPlacement = .trailing
+        grid.column(at: 0).width = 44
 
         // 完成按钮
         let doneBtn = NSButton(title: "完成", target: self, action: #selector(done))
-        doneBtn.frame = NSRect(x: 520 - padding - 80, y: 28 - 4, width: 80, height: 30)
+        doneBtn.translatesAutoresizingMaskIntoConstraints = false
         doneBtn.bezelStyle = .rounded
         doneBtn.keyEquivalent = "\r"
         cv.addSubview(doneBtn)
+
+        NSLayoutConstraint.activate([
+            scroll.topAnchor.constraint(equalTo: cv.topAnchor, constant: p),
+            scroll.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: p),
+            scroll.trailingAnchor.constraint(equalTo: cv.trailingAnchor, constant: -p),
+            scroll.heightAnchor.constraint(equalToConstant: 200),
+
+            addBtn.topAnchor.constraint(equalTo: scroll.bottomAnchor, constant: 6),
+            addBtn.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: p),
+            addBtn.widthAnchor.constraint(equalToConstant: 28),
+
+            delBtn.topAnchor.constraint(equalTo: addBtn.topAnchor),
+            delBtn.leadingAnchor.constraint(equalTo: addBtn.trailingAnchor, constant: 4),
+            delBtn.widthAnchor.constraint(equalToConstant: 28),
+
+            sep.topAnchor.constraint(equalTo: addBtn.bottomAnchor, constant: 10),
+            sep.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: p),
+            sep.trailingAnchor.constraint(equalTo: cv.trailingAnchor, constant: -p),
+            sep.heightAnchor.constraint(equalToConstant: 1),
+
+            grid.topAnchor.constraint(equalTo: sep.bottomAnchor, constant: 12),
+            grid.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: p),
+            grid.trailingAnchor.constraint(equalTo: cv.trailingAnchor, constant: -p),
+
+            doneBtn.bottomAnchor.constraint(equalTo: cv.bottomAnchor, constant: -p),
+            doneBtn.trailingAnchor.constraint(equalTo: cv.trailingAnchor, constant: -p),
+            doneBtn.widthAnchor.constraint(equalToConstant: 72),
+        ])
     }
 
-    // MARK: TableView
+    private func makeField() -> NSTextField {
+        let f = NSTextField()
+        f.bezelStyle = .roundedBezel
+        f.font = .systemFont(ofSize: 12)
+        f.translatesAutoresizingMaskIntoConstraints = false
+        f.widthAnchor.constraint(greaterThanOrEqualToConstant: 300).isActive = true
+        return f
+    }
+
+    // MARK: Table DataSource / Delegate
 
     func numberOfRows(in tableView: NSTableView) -> Int { providers.count }
 
-    func tableView(_ tableView: NSTableView, objectValueFor tableColumn: NSTableColumn?, row: Int) -> Any? {
+    func tableView(_ tableView: NSTableView, objectValueFor col: NSTableColumn?, row: Int) -> Any? {
         let p = providers[row]
-        switch tableColumn?.identifier.rawValue {
+        switch col?.identifier.rawValue {
         case "name":  return p.name
         case "url":   return p.baseURL
         case "model": return p.defaultModel
@@ -160,11 +184,11 @@ final class ProviderEditorController: NSObject, NSTableViewDataSource, NSTableVi
     }
 
     func tableView(_ tableView: NSTableView, setObjectValue obj: Any?, for col: NSTableColumn?, row: Int) {
-        guard let val = obj as? String else { return }
+        guard let v = obj as? String else { return }
         switch col?.identifier.rawValue {
-        case "name":  providers[row].name = val
-        case "url":   providers[row].baseURL = val
-        case "model": providers[row].defaultModel = val
+        case "name":  providers[row].name = v
+        case "url":   providers[row].baseURL = v
+        case "model": providers[row].defaultModel = v
         default: break
         }
     }
@@ -172,41 +196,14 @@ final class ProviderEditorController: NSObject, NSTableViewDataSource, NSTableVi
     func tableViewSelectionDidChange(_ notification: Notification) {
         let row = tableView.selectedRow
         guard row >= 0 else { return }
-        let p = providers[row]
-        nameField.stringValue  = p.name
-        urlField.stringValue   = p.baseURL
-        modelField.stringValue = p.defaultModel
+        nameField.stringValue  = providers[row].name
+        urlField.stringValue   = providers[row].baseURL
+        modelField.stringValue = providers[row].defaultModel
     }
 
-    // MARK: Actions
+    // MARK: NSTextFieldDelegate — 实时同步到 providers 数组
 
-    @objc private func addProvider() {
-        providers.append(LLMProvider(name: "新服务商", baseURL: "", defaultModel: ""))
-        tableView.reloadData()
-        let last = providers.count - 1
-        tableView.selectRowIndexes(IndexSet(integer: last), byExtendingSelection: false)
-        tableView.scrollRowToVisible(last)
-        nameField.stringValue = providers[last].name
-        urlField.stringValue = ""
-        modelField.stringValue = ""
-        nameField.becomeFirstResponder()
-    }
-
-    @objc private func deleteProvider() {
-        let row = tableView.selectedRow
-        guard row >= 0 else { return }
-        providers.remove(at: row)
-        tableView.reloadData()
-        // 选中相邻行
-        if !providers.isEmpty {
-            let next = min(row, providers.count - 1)
-            tableView.selectRowIndexes(IndexSet(integer: next), byExtendingSelection: false)
-        } else {
-            nameField.stringValue = ""; urlField.stringValue = ""; modelField.stringValue = ""
-        }
-    }
-
-    @objc private func fieldEdited(_ sender: NSTextField) {
+    func controlTextDidChange(_ obj: Notification) {
         let row = tableView.selectedRow
         guard row >= 0 else { return }
         providers[row].name         = nameField.stringValue
@@ -214,6 +211,30 @@ final class ProviderEditorController: NSObject, NSTableViewDataSource, NSTableVi
         providers[row].defaultModel = modelField.stringValue
         tableView.reloadData(forRowIndexes: IndexSet(integer: row),
                              columnIndexes: IndexSet(0..<3))
+    }
+
+    // MARK: Actions
+
+    @objc private func addRow() {
+        providers.append(LLMProvider(name: "新服务商", baseURL: "", defaultModel: ""))
+        tableView.reloadData()
+        let i = providers.count - 1
+        tableView.selectRowIndexes(IndexSet(integer: i), byExtendingSelection: false)
+        tableView.scrollRowToVisible(i)
+        nameField.stringValue = providers[i].name
+        urlField.stringValue = ""; modelField.stringValue = ""
+        sheet.makeFirstResponder(nameField)
+    }
+
+    @objc private func deleteRow() {
+        let row = tableView.selectedRow
+        guard row >= 0 else { return }
+        providers.remove(at: row)
+        tableView.reloadData()
+        if !providers.isEmpty {
+            let next = min(row, providers.count - 1)
+            tableView.selectRowIndexes(IndexSet(integer: next), byExtendingSelection: false)
+        }
     }
 
     @objc private func done() {
@@ -242,146 +263,182 @@ final class SettingsWindowController: NSObject {
     }
 
     func showWindow() {
-        if let window = window {
+        if let w = window {
             refreshFields()
-            window.makeKeyAndOrderFront(nil)
+            w.makeKeyAndOrderFront(nil)
             if #available(macOS 14.0, *) { NSApp.activate() }
             else { NSApp.activate(ignoringOtherApps: true) }
             return
         }
+        buildWindow()
+    }
 
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 400),
+    // MARK: - 构建窗口
+
+    private func buildWindow() {
+        let w = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 0),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
-        window.title = "LLM 文本优化设置"
-        window.center()
-        window.isReleasedWhenClosed = false
+        w.title = "LLM 文本优化设置"
+        w.isReleasedWhenClosed = false
 
-        let cv = NSView(frame: window.contentView!.bounds)
-        cv.autoresizingMask = [.width, .height]
-        window.contentView = cv
+        // ── 直接使用系统 contentView，不替换它 ──────────────
+        guard let cv = w.contentView else { return }
 
-        let padding: CGFloat = 24
-        let labelWidth: CGFloat = 110
-        let fh: CGFloat = 28
-        let spacing: CGFloat = 44
-        var y: CGFloat = 348
+        // 主垂直 StackView
+        let vStack = NSStackView()
+        vStack.orientation = .vertical
+        vStack.spacing = 0
+        vStack.alignment = .leading
+        vStack.translatesAutoresizingMaskIntoConstraints = false
+        cv.addSubview(vStack)
 
-        // 服务商行（popup + 编辑按钮）
-        cv.addSubview(makeLabel("服务商:", frame: NSRect(x: padding, y: y, width: labelWidth, height: fh)))
-        providerPopup = NSPopUpButton(frame: NSRect(x: padding + labelWidth + 8, y: y, width: 236, height: fh))
+        NSLayoutConstraint.activate([
+            vStack.topAnchor.constraint(equalTo: cv.topAnchor, constant: 20),
+            vStack.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: 20),
+            vStack.trailingAnchor.constraint(equalTo: cv.trailingAnchor, constant: -20),
+            vStack.bottomAnchor.constraint(equalTo: cv.bottomAnchor, constant: -20),
+        ])
+
+        // ── 表单区（NSGridView） ──────────────────────────────
+        let formGrid = NSGridView()
+        formGrid.rowSpacing = 10
+        formGrid.columnSpacing = 8
+        formGrid.translatesAutoresizingMaskIntoConstraints = false
+
+        // 服务商行 = popup + 管理按钮
+        providers = ProviderStore.load()
+        providerPopup = NSPopUpButton()
+        providerPopup.translatesAutoresizingMaskIntoConstraints = false
         providerPopup.target = self
         providerPopup.action = #selector(providerChanged(_:))
-        cv.addSubview(providerPopup)
+        providers.forEach { providerPopup.addItem(withTitle: $0.name) }
 
-        let editBtn = NSButton(title: "管理...", target: self, action: #selector(editProviders(_:)))
-        editBtn.frame = NSRect(x: padding + labelWidth + 8 + 242, y: y, width: 72, height: fh)
-        editBtn.bezelStyle = .rounded
-        cv.addSubview(editBtn)
-        y -= spacing
+        let manageBtn = NSButton(title: "管理...", target: self, action: #selector(editProviders(_:)))
+        manageBtn.bezelStyle = .rounded
 
-        // API 地址
-        cv.addSubview(makeLabel("API 地址:", frame: NSRect(x: padding, y: y, width: labelWidth, height: fh)))
-        apiBaseURLField = makeTextField(frame: NSRect(x: padding + labelWidth + 8, y: y, width: 320, height: fh))
-        apiBaseURLField.placeholderString = "https://api.openai.com/v1"
-        cv.addSubview(apiBaseURLField)
-        y -= spacing
+        let providerRow = NSStackView(views: [providerPopup, manageBtn])
+        providerRow.orientation = .horizontal
+        providerRow.spacing = 8
 
-        // API 密钥
-        cv.addSubview(makeLabel("API 密钥:", frame: NSRect(x: padding, y: y, width: labelWidth, height: fh)))
-        apiKeyField = NSSecureTextField(frame: NSRect(x: padding + labelWidth + 8, y: y, width: 320, height: fh))
-        apiKeyField.placeholderString = "sk-..."
-        styleTextField(apiKeyField)
-        cv.addSubview(apiKeyField)
-        y -= spacing
+        apiBaseURLField = makeField(placeholder: "https://api.openai.com/v1")
+        apiKeyField = makeSecureField(placeholder: "sk-...")
+        modelField  = makeField(placeholder: "gpt-4o-mini")
 
-        // 模型
-        cv.addSubview(makeLabel("模型:", frame: NSRect(x: padding, y: y, width: labelWidth, height: fh)))
-        modelField = makeTextField(frame: NSRect(x: padding + labelWidth + 8, y: y, width: 320, height: fh))
-        modelField.placeholderString = "gpt-4o-mini"
-        cv.addSubview(modelField)
-        y -= spacing
+        // 延迟行 = 数字字段 + 说明文字
+        delayField = makeField(placeholder: "0.3")
+        delayField.widthAnchor.constraint(equalToConstant: 56).isActive = true
 
-        // 延迟
-        cv.addSubview(makeLabel("结果展示延迟:", frame: NSRect(x: padding, y: y, width: labelWidth, height: fh)))
-        delayField = makeTextField(frame: NSRect(x: padding + labelWidth + 8, y: y, width: 60, height: fh))
-        delayField.placeholderString = "0.3"
-        cv.addSubview(delayField)
-        let unitLabel = NSTextField(labelWithString: "秒（0 为立即注入）")
-        unitLabel.frame = NSRect(x: padding + labelWidth + 76, y: y + 4, width: 200, height: 20)
-        unitLabel.font = .systemFont(ofSize: 12); unitLabel.textColor = .tertiaryLabelColor
-        cv.addSubview(unitLabel)
-        y -= 52
+        let delayHint = NSTextField(labelWithString: "秒（0 为立即注入）")
+        delayHint.font = .systemFont(ofSize: 11)
+        delayHint.textColor = .tertiaryLabelColor
 
-        // 分割线
-        let sep = NSBox(frame: NSRect(x: padding, y: y, width: 500 - padding * 2, height: 1))
-        sep.boxType = .separator; cv.addSubview(sep)
-        y -= 36
+        let delayRow = NSStackView(views: [delayField, delayHint])
+        delayRow.orientation = .horizontal
+        delayRow.spacing = 6
+        delayRow.alignment = .centerY
 
-        // 状态
-        statusLabel = NSTextField(labelWithString: "")
-        statusLabel.frame = NSRect(x: padding, y: y, width: 310, height: 20)
-        statusLabel.font = .systemFont(ofSize: 12); statusLabel.textColor = .secondaryLabelColor
-        cv.addSubview(statusLabel)
-
-        // 按钮
-        let btnW: CGFloat = 88, btnH: CGFloat = 32, btnY = y - 2
-        cv.addSubview(makeButton("测试连接", action: #selector(testConnection(_:)),
-                                  frame: NSRect(x: 500 - padding - btnW * 3 - 20, y: btnY, width: btnW, height: btnH)))
-        let saveBtn = makeButton("保存", action: #selector(saveSettings(_:)),
-                                  frame: NSRect(x: 500 - padding - btnW * 2 - 10, y: btnY, width: btnW, height: btnH), isPrimary: true)
-        saveBtn.keyEquivalent = "\r"; cv.addSubview(saveBtn)
-        let cancelBtn = makeButton("取消", action: #selector(cancelSettings(_:)),
-                                    frame: NSRect(x: 500 - padding - btnW, y: btnY, width: btnW, height: btnH))
-        cancelBtn.keyEquivalent = "\u{1b}"; cv.addSubview(cancelBtn)
-
-        self.window = window
-        refreshFields()
-        window.recalculateKeyViewLoop()
-        window.makeKeyAndOrderFront(nil)
-        if #available(macOS 14.0, *) {
-            NSApp.activate()
-        } else {
-            NSApp.activate(ignoringOtherApps: true)
+        let rows: [(String, NSView)] = [
+            ("服务商:", providerRow),
+            ("API 地址:", apiBaseURLField),
+            ("API 密钥:", apiKeyField),
+            ("模型:", modelField),
+            ("结果展示延迟:", delayRow),
+        ]
+        for (title, control) in rows {
+            let label = NSTextField(labelWithString: title)
+            label.font = .systemFont(ofSize: 13)
+            label.textColor = .secondaryLabelColor
+            label.alignment = .right
+            formGrid.addRow(with: [label, control])
         }
+        // 标签列右对齐、固定宽度
+        formGrid.column(at: 0).xPlacement = .trailing
+        formGrid.column(at: 0).width = 96
+        // 控件列拉伸填满
+        formGrid.column(at: 1).xPlacement = .fill
+
+        vStack.addArrangedSubview(formGrid)
+        formGrid.widthAnchor.constraint(equalTo: vStack.widthAnchor).isActive = true
+
+        // ── 分割线 ────────────────────────────────────────────
+        let sep = NSBox()
+        sep.boxType = .separator
+        sep.translatesAutoresizingMaskIntoConstraints = false
+        vStack.addArrangedSubview(sep)
+        sep.widthAnchor.constraint(equalTo: vStack.widthAnchor).isActive = true
+        vStack.setCustomSpacing(16, after: formGrid)
+        vStack.setCustomSpacing(16, after: sep)
+
+        // ── 底部行：状态 + 按钮 ───────────────────────────────
+        statusLabel = NSTextField(labelWithString: "")
+        statusLabel.font = .systemFont(ofSize: 12)
+        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let testBtn   = makeButton("测试连接", action: #selector(testConnection(_:)))
+        let cancelBtn = makeButton("取消",     action: #selector(cancelSettings(_:)))
+        let saveBtn   = makeButton("保存",     action: #selector(saveSettings(_:)), isPrimary: true)
+        saveBtn.keyEquivalent = "\r"
+        cancelBtn.keyEquivalent = "\u{1b}"
+
+        let bottomRow = NSStackView(views: [statusLabel, testBtn, cancelBtn, saveBtn])
+        bottomRow.orientation = .horizontal
+        bottomRow.spacing = 8
+        bottomRow.alignment = .centerY
+        vStack.addArrangedSubview(bottomRow)
+        bottomRow.widthAnchor.constraint(equalTo: vStack.widthAnchor).isActive = true
+
+        self.window = w
+        refreshFields()
+        w.center()
+        w.recalculateKeyViewLoop()
+        w.makeKeyAndOrderFront(nil)
+        if #available(macOS 14.0, *) { NSApp.activate() }
+        else { NSApp.activate(ignoringOtherApps: true) }
     }
 
     // MARK: - Helpers
 
-    private func makeLabel(_ text: String, frame: NSRect) -> NSTextField {
-        let l = NSTextField(labelWithString: text)
-        l.frame = frame; l.alignment = .right
-        l.font = .systemFont(ofSize: 13); l.textColor = .secondaryLabelColor
-        return l
+    private func makeField(placeholder: String) -> NSTextField {
+        let f = NSTextField()
+        f.bezelStyle = .roundedBezel
+        f.font = .systemFont(ofSize: 13)
+        f.placeholderString = placeholder
+        f.translatesAutoresizingMaskIntoConstraints = false
+        return f
     }
-    private func makeTextField(frame: NSRect) -> NSTextField {
-        let f = NSTextField(frame: frame)
-        styleTextField(f); return f
+
+    private func makeSecureField(placeholder: String) -> NSSecureTextField {
+        let f = NSSecureTextField()
+        f.bezelStyle = .roundedBezel
+        f.font = .systemFont(ofSize: 13)
+        f.placeholderString = placeholder
+        f.translatesAutoresizingMaskIntoConstraints = false
+        return f
     }
-    private func styleTextField(_ f: NSTextField) {
-        f.bezelStyle = .roundedBezel; f.font = .systemFont(ofSize: 13)
-    }
-    private func makeButton(_ title: String, action: Selector, frame: NSRect, isPrimary: Bool = false) -> NSButton {
+
+    private func makeButton(_ title: String, action: Selector, isPrimary: Bool = false) -> NSButton {
         let b = NSButton(title: title, target: self, action: action)
-        b.frame = frame
-        if #available(macOS 26.0, *) { b.bezelStyle = .glass } else { b.bezelStyle = .rounded }
+        if #available(macOS 26.0, *) { b.bezelStyle = .glass }
+        else { b.bezelStyle = .rounded }
         return b
     }
 
-    private func rebuildPopup() {
-        providers = ProviderStore.load()
-        providerPopup.removeAllItems()
-        providers.forEach { providerPopup.addItem(withTitle: $0.name) }
-    }
+    // MARK: - State
 
     private func refreshFields() {
-        rebuildPopup()
-        let savedURL   = UserDefaults.standard.string(forKey: "llmAPIBaseURL") ?? "https://api.openai.com/v1"
-        let matchIndex = providers.firstIndex { $0.baseURL == savedURL } ?? (providers.count - 1)
-        providerPopup.selectItem(at: matchIndex)
+        providers = ProviderStore.load()
+        providerPopup?.removeAllItems()
+        providers.forEach { providerPopup?.addItem(withTitle: $0.name) }
+
+        let savedURL = UserDefaults.standard.string(forKey: "llmAPIBaseURL") ?? "https://api.openai.com/v1"
+        let matchIdx = providers.firstIndex { $0.baseURL == savedURL } ?? (providers.count - 1)
+        providerPopup?.selectItem(at: matchIdx)
+
         apiBaseURLField?.stringValue = savedURL
         apiKeyField?.stringValue     = UserDefaults.standard.string(forKey: "llmAPIKey") ?? ""
         modelField?.stringValue      = UserDefaults.standard.string(forKey: "llmModel") ?? "gpt-4o-mini"
@@ -397,7 +454,7 @@ final class SettingsWindowController: NSObject {
         if p.baseURL.isEmpty {
             apiBaseURLField.stringValue = ""
             modelField.stringValue = ""
-            apiBaseURLField.becomeFirstResponder()
+            window?.makeFirstResponder(apiBaseURLField)
         } else {
             apiBaseURLField.stringValue = p.baseURL
             modelField.stringValue = p.defaultModel
@@ -405,26 +462,28 @@ final class SettingsWindowController: NSObject {
     }
 
     @objc private func editProviders(_ sender: NSButton) {
-        guard let window = window else { return }
+        guard let w = window else { return }
         let editor = ProviderEditorController()
-        editor.onDone = { [weak self] _ in
-            self?.refreshFields()
-        }
+        editor.onDone = { [weak self] _ in self?.refreshFields() }
         providerEditor = editor
-        editor.show(in: window)
+        editor.show(in: w)
     }
 
     @objc private func testConnection(_ sender: NSButton) {
         let origBase  = UserDefaults.standard.string(forKey: "llmAPIBaseURL")
         let origKey   = UserDefaults.standard.string(forKey: "llmAPIKey")
         let origModel = UserDefaults.standard.string(forKey: "llmModel")
+
         UserDefaults.standard.set(apiBaseURLField.stringValue, forKey: "llmAPIBaseURL")
         UserDefaults.standard.set(apiKeyField.stringValue,     forKey: "llmAPIKey")
         UserDefaults.standard.set(modelField.stringValue,      forKey: "llmModel")
-        statusLabel.stringValue = "正在测试..."; statusLabel.textColor = .secondaryLabelColor
-        llmRefiner.testConnection { [weak self] success, message in
+
+        statusLabel.stringValue = "正在测试..."
+        statusLabel.textColor = .secondaryLabelColor
+
+        llmRefiner.testConnection { [weak self] success, msg in
             DispatchQueue.main.async {
-                self?.statusLabel.stringValue = success ? "连接成功!" : "连接失败: \(message)"
+                self?.statusLabel.stringValue = success ? "连接成功!" : "连接失败: \(msg)"
                 self?.statusLabel.textColor = success ? .systemGreen : .systemRed
                 if let b = origBase  { UserDefaults.standard.set(b, forKey: "llmAPIBaseURL") }
                 if let k = origKey   { UserDefaults.standard.set(k, forKey: "llmAPIKey") }
@@ -438,7 +497,8 @@ final class SettingsWindowController: NSObject {
         UserDefaults.standard.set(apiKeyField.stringValue,     forKey: "llmAPIKey")
         UserDefaults.standard.set(modelField.stringValue,      forKey: "llmModel")
         UserDefaults.standard.set(max(0, Double(delayField.stringValue) ?? 0.3), forKey: "llmResultDelay")
-        statusLabel.stringValue = "已保存"; statusLabel.textColor = .systemGreen
+        statusLabel.stringValue = "已保存"
+        statusLabel.textColor = .systemGreen
         window?.close()
     }
 
