@@ -77,6 +77,12 @@ final class MenuBarController {
         minimalItem.state = currentAnim == "minimal" ? .on : .off
         animMenu.addItem(minimalItem)
 
+        let noneItem = NSMenuItem(title: "无", action: #selector(selectAnimation(_:)), keyEquivalent: "")
+        noneItem.target = self
+        noneItem.representedObject = "none"
+        noneItem.state = currentAnim == "none" ? .on : .off
+        animMenu.addItem(noneItem)
+
         animItem.submenu = animMenu
         menu.addItem(animItem)
 

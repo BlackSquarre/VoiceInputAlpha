@@ -1,5 +1,5 @@
 APP_NAME    = VoiceInput
-VERSION     = 1.0
+VERSION     = 0.9
 BUILD_DIR   = .build/release
 DIST_DIR    = dist
 APP_BUNDLE  = $(BUILD_DIR)/$(APP_NAME).app
@@ -34,31 +34,31 @@ clean-dist:
 	mkdir -p $(DIST_DIR)
 
 build-arm64:
-	@echo "→ Building arm64..."
+	@echo "→ Building Apple Silicon (arm64)..."
 	swift build -c release --arch arm64
-	$(call bundle_app,.build/arm64-apple-macosx/release/$(APP_NAME),$(DIST_DIR)/$(APP_NAME)-arm64.app)
-	cd $(DIST_DIR) && zip -qr $(APP_NAME)-$(VERSION)-arm64.zip $(APP_NAME)-arm64.app
-	rm -rf $(DIST_DIR)/$(APP_NAME)-arm64.app
-	@echo "  arm64 done"
+	$(call bundle_app,.build/arm64-apple-macosx/release/$(APP_NAME),$(DIST_DIR)/$(APP_NAME).app)
+	cd $(DIST_DIR) && zip -qr $(APP_NAME)-$(VERSION)-AppleSilicon.zip $(APP_NAME).app
+	rm -rf $(DIST_DIR)/$(APP_NAME).app
+	@echo "  Apple Silicon done"
 
 build-x86_64:
-	@echo "→ Building x86_64..."
+	@echo "→ Building Intel (x86_64)..."
 	swift build -c release --arch x86_64
-	$(call bundle_app,.build/x86_64-apple-macosx/release/$(APP_NAME),$(DIST_DIR)/$(APP_NAME)-x86_64.app)
-	cd $(DIST_DIR) && zip -qr $(APP_NAME)-$(VERSION)-x86_64.zip $(APP_NAME)-x86_64.app
-	rm -rf $(DIST_DIR)/$(APP_NAME)-x86_64.app
-	@echo "  x86_64 done"
+	$(call bundle_app,.build/x86_64-apple-macosx/release/$(APP_NAME),$(DIST_DIR)/$(APP_NAME).app)
+	cd $(DIST_DIR) && zip -qr $(APP_NAME)-$(VERSION)-Intel.zip $(APP_NAME).app
+	rm -rf $(DIST_DIR)/$(APP_NAME).app
+	@echo "  Intel done"
 
 build-universal:
-	@echo "→ Building Universal (arm64 + x86_64)..."
+	@echo "→ Building Universal (Apple Silicon + Intel)..."
 	lipo -create \
 		.build/arm64-apple-macosx/release/$(APP_NAME) \
 		.build/x86_64-apple-macosx/release/$(APP_NAME) \
 		-output $(DIST_DIR)/$(APP_NAME)-universal-bin
-	$(call bundle_app,$(DIST_DIR)/$(APP_NAME)-universal-bin,$(DIST_DIR)/$(APP_NAME)-universal.app)
+	$(call bundle_app,$(DIST_DIR)/$(APP_NAME)-universal-bin,$(DIST_DIR)/$(APP_NAME).app)
 	rm -f $(DIST_DIR)/$(APP_NAME)-universal-bin
-	cd $(DIST_DIR) && zip -qr $(APP_NAME)-$(VERSION)-universal.zip $(APP_NAME)-universal.app
-	rm -rf $(DIST_DIR)/$(APP_NAME)-universal.app
+	cd $(DIST_DIR) && zip -qr $(APP_NAME)-$(VERSION)-Universal.zip $(APP_NAME).app
+	rm -rf $(DIST_DIR)/$(APP_NAME).app
 	@echo "  Universal done"
 
 # ── 通用 bundle 函数：$(1)=二进制路径, $(2)=.app目标路径 ─────────────

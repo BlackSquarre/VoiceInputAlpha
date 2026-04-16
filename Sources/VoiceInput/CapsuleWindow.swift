@@ -6,7 +6,8 @@ final class CapsuleWindowController {
     private var textLabel: NSTextField?
     private var refiningLabel: NSTextField?
     private var contentView: NSView?
-    private var springTimer: Timer?   // 弹簧动画驱动 Timer
+    private var springTimer: Timer?
+    private var shadowLayer: CALayer?  // 胶囊形状阴影层
 
     private let capsuleHeight: CGFloat = 50
     private let cornerRadius: CGFloat = 25
@@ -22,8 +23,20 @@ final class CapsuleWindowController {
     private let springK: CGFloat = 260   // 刚度
     private let springC: CGFloat = 24    // 阻尼（临界 = 2√k·m，此处略低→有回弹）
 
-    private var isDynamicIsland: Bool {
-        UserDefaults.standard.string(forKey: "animationStyle") != "minimal"
+    private var animationStyle: String {
+        UserDefaults.standard.string(forKey: "animationStyle") ?? "dynamicIsland"
+    }
+
+    // MARK: - 辅助
+
+    private func capsulePath(for rect: NSRect) -> CGPath {
+        CGPath(roundedRect: rect, cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil)
+    }
+
+    private func updateShadowPath(width: CGFloat) {
+        guard let sl = shadowLayer else { return }
+        let r = NSRect(x: 0, y: 0, width: width, height: capsuleHeight)
+        sl.shadowPath = capsulePath(for: r)
     }
 
     // MARK: - 布局计算
@@ -53,7 +66,7 @@ final class CapsuleWindowController {
         )
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.hasShadow = false  // 用自定义 CALayer 阴影代替，精确跟随胶囊形状
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = false
@@ -125,6 +138,19 @@ final class CapsuleWindowController {
             ])
         }
 
+        // 胶囊形状阴影层：插在 contentView 最底层，shadowPath 精确跟随圆角
+        panel.contentView?.wantsLayer = true
+        let sl = CALayer()
+        sl.frame = panel.contentView!.bounds
+        sl.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+        sl.shadowColor = NSColor.black.cgColor
+        sl.shadowOpacity = 0.30
+        sl.shadowRadius = 20
+        sl.shadowOffset = CGSize(width: 0, height: -6)
+        sl.shadowPath = capsulePath(for: panel.contentView!.bounds)
+        panel.contentView?.layer?.insertSublayer(sl, at: 0)
+        shadowLayer = sl
+
         NSLayoutConstraint.activate([
             waveform.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: waveformLeadingOffset),
             waveform.centerYAnchor.constraint(equalTo: container.centerYAnchor),
@@ -144,10 +170,10 @@ final class CapsuleWindowController {
         self.refiningLabel = refLabel
         self.contentView = container
 
-        if isDynamicIsland {
-            animateInSpring(panel: panel, container: container, targetFrame: target)
-        } else {
-            animateInMinimal(panel: panel, targetFrame: target)
+        switch animationStyle {
+        case "none":    animateInNone(panel: panel, targetFrame: target)
+        case "minimal": animateInMinimal(panel: panel, targetFrame: target)
+        default:        animateInSpring(panel: panel, container: container, targetFrame: target)
         }
     }
 
@@ -214,7 +240,9 @@ final class CapsuleWindowController {
             // 淡入：前 150ms 完成
             let alpha = min(1.0, elapsed / 0.15)
             panel.alphaValue = alpha
-            panel.setFrame(NSRect(x: sx, y: sy, width: sw, height: self.capsuleHeight), display: false)
+            let newFrame = NSRect(x: sx, y: sy, width: sw, height: self.capsuleHeight)
+            panel.setFrame(newFrame, display: false)
+            self.updateShadowPath(width: sw)
 
             // 判断是否已稳定
             let settled = elapsed > maxTime ||
@@ -231,6 +259,22 @@ final class CapsuleWindowController {
             }
         }
         RunLoop.main.add(springTimer!, forMode: .common)
+    }
+
+    // MARK: - 无动画入场
+
+    private func animateInNone(panel: NSPanel, targetFrame: NSRect) {
+        panel.setFrame(targetFrame, display: false)
+        panel.alphaValue = 1
+        panel.orderFrontRegardless()
+    }
+
+    // MARK: - 无动画退场
+
+    private func dismissNone(panel: NSPanel, completion: (() -> Void)?) {
+        panel.orderOut(nil)
+        cleanup()
+        completion?()
     }
 
     // MARK: - 简约模式入场
@@ -272,6 +316,7 @@ final class CapsuleWindowController {
         frame.size.width = totalWidth
         frame.origin.x = screen.midX - totalWidth / 2
 
+        updateShadowPath(width: totalWidth)
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.2
             ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
@@ -291,10 +336,10 @@ final class CapsuleWindowController {
         guard let panel = panel else { completion?(); return }
         springTimer?.invalidate()
         springTimer = nil
-        if isDynamicIsland {
-            dismissSpring(panel: panel, completion: completion)
-        } else {
-            dismissMinimal(panel: panel, completion: completion)
+        switch animationStyle {
+        case "none":    dismissNone(panel: panel, completion: completion)
+        case "minimal": dismissMinimal(panel: panel, completion: completion)
+        default:        dismissSpring(panel: panel, completion: completion)
         }
     }
 
@@ -385,6 +430,8 @@ final class CapsuleWindowController {
     private func cleanup() {
         springTimer?.invalidate()
         springTimer = nil
+        shadowLayer?.removeFromSuperlayer()
+        shadowLayer = nil
         waveformView?.stopAnimating()
         waveformView = nil
         textLabel = nil
