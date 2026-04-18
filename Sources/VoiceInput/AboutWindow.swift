@@ -5,9 +5,7 @@ final class AboutWindowController: NSObject {
 
     func showWindow() {
         if let w = window {
-            w.makeKeyAndOrderFront(nil)
-            if #available(macOS 14.0, *) { NSApp.activate() }
-            else { NSApp.activate(ignoringOtherApps: true) }
+            AppDelegate.bringToFront(w)
             return
         }
         buildWindow()
@@ -15,13 +13,16 @@ final class AboutWindowController: NSObject {
 
     private func buildWindow() {
         let w = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 320),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 240, height: 280),
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         w.title = loc("about.title")
         w.isReleasedWhenClosed = false
+        w.titlebarAppearsTransparent = true
+        w.titleVisibility = .hidden
+        w.isMovableByWindowBackground = true
 
         guard let cv = w.contentView else { return }
 
@@ -30,156 +31,130 @@ final class AboutWindowController: NSObject {
         vStack.alignment = .centerX
         vStack.spacing = 0
         vStack.translatesAutoresizingMaskIntoConstraints = false
-        vStack.edgeInsets = NSEdgeInsets(top: 24, left: 20, bottom: 20, right: 20)
         cv.addSubview(vStack)
+
+        // 顶部留出 titlebar 区域
         NSLayoutConstraint.activate([
-            vStack.topAnchor.constraint(equalTo: cv.topAnchor),
-            vStack.leadingAnchor.constraint(equalTo: cv.leadingAnchor),
-            vStack.trailingAnchor.constraint(equalTo: cv.trailingAnchor),
-            vStack.bottomAnchor.constraint(equalTo: cv.bottomAnchor),
+            vStack.topAnchor.constraint(equalTo: cv.topAnchor, constant: 36),
+            vStack.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: 20),
+            vStack.trailingAnchor.constraint(equalTo: cv.trailingAnchor, constant: -20),
+            vStack.bottomAnchor.constraint(lessThanOrEqualTo: cv.bottomAnchor, constant: -20),
         ])
 
-        // ── App 图标 ───────────────────────────────────────────
+        // ── 图标 ───────────────────────────────────────────────
         let iconView = NSImageView()
         iconView.image = NSApp.applicationIconImage
         iconView.imageScaling = .scaleProportionallyDown
         iconView.translatesAutoresizingMaskIntoConstraints = false
-        iconView.widthAnchor.constraint(equalToConstant: 80).isActive = true
-        iconView.heightAnchor.constraint(equalToConstant: 80).isActive = true
+        iconView.widthAnchor.constraint(equalToConstant: 72).isActive = true
+        iconView.heightAnchor.constraint(equalToConstant: 72).isActive = true
         vStack.addArrangedSubview(iconView)
         vStack.setCustomSpacing(12, after: iconView)
 
-        // ── 应用名称 ──────────────────────────────────────────
+        // ── 应用名称 ────────────────────────────────────────────
         let nameLabel = NSTextField(labelWithString: "VoiceInput")
-        nameLabel.font = .boldSystemFont(ofSize: 18)
+        nameLabel.font = .boldSystemFont(ofSize: 17)
         nameLabel.textColor = .labelColor
         vStack.addArrangedSubview(nameLabel)
         vStack.setCustomSpacing(4, after: nameLabel)
 
-        // ── 版本号 ────────────────────────────────────────────
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.9"
+        // ── 版本号 ──────────────────────────────────────────────
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let build   = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-        let versionLabel = NSTextField(labelWithString: loc("about.version", version, build))
-        versionLabel.font = .systemFont(ofSize: 12)
-        versionLabel.textColor = .secondaryLabelColor
-        vStack.addArrangedSubview(versionLabel)
-        vStack.setCustomSpacing(20, after: versionLabel)
+        let verLabel = NSTextField(labelWithString: loc("about.version", version, build))
+        verLabel.font = .systemFont(ofSize: 11.5)
+        verLabel.textColor = .secondaryLabelColor
+        vStack.addArrangedSubview(verLabel)
+        vStack.setCustomSpacing(20, after: verLabel)
 
-        // ── 分割线 ────────────────────────────────────────────
-        let sep1 = makeSeparator()
-        vStack.addArrangedSubview(sep1)
-        sep1.widthAnchor.constraint(equalTo: vStack.widthAnchor, constant: -40).isActive = true
-        vStack.setCustomSpacing(16, after: sep1)
-
-        // ── 作者名 ────────────────────────────────────────────
-        let authorLabel = NSTextField(labelWithString: "缪凌儒BlackSquare")
-        authorLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        authorLabel.textColor = .labelColor
-        vStack.addArrangedSubview(authorLabel)
-        vStack.setCustomSpacing(14, after: authorLabel)
-
-        // ── 链接区 ────────────────────────────────────────────
-        let linksStack = NSStackView()
-        linksStack.orientation = .vertical
-        linksStack.alignment = .leading
-        linksStack.spacing = 8
-
-        linksStack.addArrangedSubview(makeLinkRow(
+        // ── 链接：Bilibili + GitHub 左右排列，仅图标，浅色 ───────
+        let linksRow = NSStackView()
+        linksRow.orientation = .horizontal
+        linksRow.spacing = 20
+        linksRow.alignment = .centerY
+        linksRow.addArrangedSubview(makeLinkIcon(
             svgName: "bilibili",
-            fallbackSymbol: "play.circle.fill",
-            fallbackColor: .systemPink,
-            title: loc("about.bilibili"),
-            url: "https://space.bilibili.com/404899"
+            fallbackSymbol: "play.circle",
+            url: "https://space.bilibili.com/404899",
+            accessibilityLabel: "Bilibili"
         ))
-        linksStack.addArrangedSubview(makeLinkRow(
+        linksRow.addArrangedSubview(makeLinkIcon(
             svgName: "github",
             fallbackSymbol: "chevron.left.forwardslash.chevron.right",
-            fallbackColor: .labelColor,
-            title: loc("about.github"),
-            url: "https://github.com/BlackSquarre/VoiceInputAlpha"
+            url: "https://github.com/BlackSquarre/VoiceInputAlpha",
+            accessibilityLabel: "GitHub"
         ))
+        vStack.addArrangedSubview(linksRow)
+        vStack.setCustomSpacing(20, after: linksRow)
 
-        vStack.addArrangedSubview(linksStack)
-        vStack.setCustomSpacing(20, after: linksStack)
-
-        // ── 分割线 ────────────────────────────────────────────
-        let sep2 = makeSeparator()
-        vStack.addArrangedSubview(sep2)
-        sep2.widthAnchor.constraint(equalTo: vStack.widthAnchor, constant: -40).isActive = true
-        vStack.setCustomSpacing(12, after: sep2)
-
-        // ── 版权 ──────────────────────────────────────────────
+        // ── 版权 ────────────────────────────────────────────────
         let copyright = NSTextField(labelWithString: loc("about.copyright"))
-        copyright.font = .systemFont(ofSize: 11)
+        copyright.font = .systemFont(ofSize: 10.5)
         copyright.textColor = .tertiaryLabelColor
+        copyright.alignment = .center
+        copyright.lineBreakMode = .byWordWrapping
+        copyright.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         vStack.addArrangedSubview(copyright)
+        copyright.widthAnchor.constraint(equalTo: vStack.widthAnchor).isActive = true
 
         self.window = w
+        w.delegate = self
         w.center()
-        w.makeKeyAndOrderFront(nil)
-        if #available(macOS 14.0, *) { NSApp.activate() }
-        else { NSApp.activate(ignoringOtherApps: true) }
+        AppDelegate.bringToFront(w)
     }
 
-    // MARK: - Helpers
+    // MARK: - Icon-only link button
 
-    private func makeSeparator() -> NSBox {
-        let box = NSBox()
-        box.boxType = .separator
-        box.translatesAutoresizingMaskIntoConstraints = false
-        return box
-    }
+    private func makeLinkIcon(svgName: String, fallbackSymbol: String,
+                               url: String, accessibilityLabel: String) -> NSView {
+        let btn = NSButton(title: "", target: self, action: #selector(openLink(_:)))
+        btn.isBordered = false
+        btn.identifier = NSUserInterfaceItemIdentifier(url)
+        btn.setAccessibilityLabel(accessibilityLabel)
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        btn.widthAnchor.constraint(equalToConstant: 26).isActive = true
+        btn.heightAnchor.constraint(equalToConstant: 26).isActive = true
 
-    private func makeLinkRow(svgName: String, fallbackSymbol: String,
-                              fallbackColor: NSColor, title: String, url: String) -> NSView {
-        let row = NSStackView()
-        row.orientation = .horizontal
-        row.spacing = 8
-        row.alignment = .centerY
-
-        // 官方 SVG 图标，加载失败降级为 SF Symbol
-        let icon = NSImageView()
-        icon.translatesAutoresizingMaskIntoConstraints = false
-        icon.widthAnchor.constraint(equalToConstant: 18).isActive = true
-        icon.heightAnchor.constraint(equalToConstant: 18).isActive = true
+        let imgView = NSImageView()
+        imgView.translatesAutoresizingMaskIntoConstraints = false
+        imgView.imageScaling = .scaleProportionallyDown
 
         if let svgURL = Bundle.main.url(forResource: svgName, withExtension: "svg",
                                          subdirectory: "Icons"),
-           let svgImage = NSImage(contentsOf: svgURL) {
-            svgImage.size = NSSize(width: 18, height: 18)
-            icon.image = svgImage
-            // 适配深浅色：通过 template 模式让系统着色
-            icon.image?.isTemplate = true
-            icon.contentTintColor = fallbackColor
+           let img = NSImage(contentsOf: svgURL) {
+            img.size = NSSize(width: 20, height: 20)
+            img.isTemplate = true
+            imgView.image = img
         } else {
-            // 降级到 SF Symbol
-            let cfg = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
-            icon.image = NSImage(systemSymbolName: fallbackSymbol,
-                                  accessibilityDescription: nil)?
-                .withSymbolConfiguration(cfg)
-            icon.contentTintColor = fallbackColor
+            imgView.image = NSImage(systemSymbolName: fallbackSymbol,
+                                    accessibilityDescription: nil)?
+                .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 16, weight: .regular))
         }
+        imgView.contentTintColor = .secondaryLabelColor   // 浅色
 
-        // 链接按钮（下划线 + linkColor）
-        let btn = NSButton(title: title, target: self, action: #selector(openLink(_:)))
-        btn.isBordered = false
-        btn.identifier = NSUserInterfaceItemIdentifier(url)
-        let attrs: [NSAttributedString.Key: Any] = [
-            .foregroundColor: NSColor.linkColor,
-            .underlineStyle: NSUnderlineStyle.single.rawValue,
-            .font: NSFont.systemFont(ofSize: 13),
-        ]
-        btn.attributedTitle = NSAttributedString(string: title, attributes: attrs)
-        btn.toolTip = url
-
-        row.addArrangedSubview(icon)
-        row.addArrangedSubview(btn)
-        return row
+        btn.addSubview(imgView)
+        NSLayoutConstraint.activate([
+            imgView.centerXAnchor.constraint(equalTo: btn.centerXAnchor),
+            imgView.centerYAnchor.constraint(equalTo: btn.centerYAnchor),
+            imgView.widthAnchor.constraint(equalToConstant: 20),
+            imgView.heightAnchor.constraint(equalToConstant: 20),
+        ])
+        return btn
     }
 
     @objc private func openLink(_ sender: NSButton) {
         guard let urlStr = sender.identifier?.rawValue,
               let url = URL(string: urlStr) else { return }
         NSWorkspace.shared.open(url)
+    }
+}
+
+// MARK: - NSWindowDelegate
+
+extension AboutWindowController: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        if let w = notification.object as? NSWindow {
+            AppDelegate.resetActivationIfNeeded(closing: w)
+        }
     }
 }

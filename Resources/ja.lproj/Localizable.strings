@@ -54,7 +54,7 @@
 "about.version" = "バージョン %@ (%@)";
 "about.bilibili" = "Bilibili";
 "about.github" = "GitHub プロジェクト";
-"about.copyright" = "© 2026 缪凌儒. All rights reserved.";
+"about.copyright" = "© 2026 缪凌儒BlackSquare\nAll rights reserved.";
 
 /* Errors */
 "error.noApiKey" = "API キーが設定されていません";
@@ -74,3 +74,33 @@
 "accessibility.warning.message" = "システム設定 > プライバシーとセキュリティ > アクセシビリティで、VoiceInput を削除して再追加してください。";
 "accessibility.openSettings" = "システム設定を開く";
 "accessibility.ignore" = "無視";
+
+/* Permissions Window */
+"permissions.window.title" = "システム権限の状態";
+"permissions.heading" = "VoiceInput に必要な権限を許可してください";
+"permissions.guide.title" = "権限の許可方法";
+"permissions.guide.step1" = "右側のボタンをクリックしてシステム設定を開く";
+"permissions.guide.step2" = "リストから VoiceInput を見つけてスイッチをオンにする";
+"permissions.guide.step3" = "このウィンドウに戻り、状態が緑色「許可済み」になっていることを確認";
+"permissions.troubleshoot" = "トラブルシューティング";
+"permissions.reset" = "すべての権限をリセット";
+"permissions.reset.confirm.title" = "権限をリセット";
+"permissions.reset.confirm.message" = "ターミナルで tccutil を実行してマイクと音声認識の権限をリセットします。リセット後に再度許可が必要です。";
+"permissions.reset.confirm.ok" = "続ける";
+"permissions.close" = "閉じる";
+
+"permission.accessibility.title" = "アクセシビリティ";
+"permission.accessibility.desc" = "VoiceInput は Fn キーをグローバルに監視するためにアクセシビリティ権限が必要です。これはコア機能です。";
+"permission.microphone.title" = "マイク";
+"permission.microphone.desc" = "VoiceInput は音声を録音するためにマイク権限が必要です。";
+"permission.speech.title" = "音声認識";
+"permission.speech.desc" = "VoiceInput は音声をテキストに変換するために音声認識権限が必要です。";
+
+"permission.status.granted" = "許可済み";
+"permission.status.denied" = "拒否済み";
+"permission.status.notDetermined" = "未決定";
+"permission.action.open" = "システム設定を開く";
+"permission.action.request" = "権限を要求";
+
+"menu.launchAtLogin" = "ログイン時に起動";
+"menu.help" = "権限とヘルプ";

@@ -54,7 +54,7 @@
 "about.version" = "版本 %@ (%@)";
 "about.bilibili" = "Bilibili 主页";
 "about.github" = "GitHub 项目";
-"about.copyright" = "© 2026 缪凌儒. 保留所有权利。";
+"about.copyright" = "© 2026 缪凌儒BlackSquare\n保留所有权利。";
 
 /* Errors */
 "error.noApiKey" = "未设置 API 密钥";
@@ -74,3 +74,34 @@
 "accessibility.warning.message" = "请前往系统设置 > 隐私与安全性 > 辅助功能，移除并重新添加语音输入。";
 "accessibility.openSettings" = "打开系统设置";
 "accessibility.ignore" = "忽略";
+
+/* Permissions Window */
+"permissions.window.title" = "系统权限状态";
+"permissions.heading" = "授予 VoiceInput 完整功能所需权限";
+"permissions.guide.title" = "如何授予权限";
+"permissions.guide.step1" = "点击右侧按钮打开系统设置";
+"permissions.guide.step2" = "在列表中找到 VoiceInput 并开启对应开关";
+"permissions.guide.step3" = "返回此窗口，确认状态变为绿色「已授权」";
+"permissions.troubleshoot" = "故障排除";
+"permissions.reset" = "重置所有权限";
+"permissions.reset.confirm.title" = "重置权限";
+"permissions.reset.confirm.message" = "将在终端运行 tccutil 重置麦克风和语音识别权限，重置后需要重新授权。";
+"permissions.reset.confirm.ok" = "继续";
+"permissions.close" = "关闭";
+
+"permission.accessibility.title" = "辅助功能";
+"permission.accessibility.desc" = "VoiceInput 需要辅助功能权限来全局监听 Fn 键，这是核心功能。";
+"permission.microphone.title" = "麦克风";
+"permission.microphone.desc" = "VoiceInput 需要麦克风权限来录制您的语音。";
+"permission.speech.title" = "语音识别";
+"permission.speech.desc" = "VoiceInput 需要语音识别权限来将您的语音转录为文字。";
+
+"permission.status.granted" = "已授权";
+"permission.status.denied" = "已拒绝";
+"permission.status.notDetermined" = "待授权";
+"permission.action.open" = "打开系统设置";
+"permission.action.request" = "请求权限";
+
+/* Launch at Login */
+"menu.launchAtLogin" = "开机启动";
+"menu.help" = "权限与帮助";

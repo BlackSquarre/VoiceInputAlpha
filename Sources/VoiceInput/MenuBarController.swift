@@ -1,4 +1,8 @@
 import Cocoa
+import AVFoundation
+import Speech
+import ApplicationServices
+import ServiceManagement
 
 final class MenuBarController {
     private var statusItem: NSStatusItem!
@@ -6,6 +10,7 @@ final class MenuBarController {
     private let llmRefiner: LLMRefiner
     private var settingsWindow: SettingsWindowController?
     private var aboutWindow: AboutWindowController?
+    private var permissionsWindow: PermissionsWindowController?
 
     private let languages: [(code: String, name: String)] = [
         ("en-US", "English"),
@@ -132,6 +137,25 @@ final class MenuBarController {
 
         menu.addItem(.separator())
 
+        // 开机启动
+        let launchAtLoginItem = NSMenuItem(title: loc("menu.launchAtLogin"),
+                                           action: #selector(toggleLaunchAtLogin(_:)),
+                                           keyEquivalent: "")
+        launchAtLoginItem.image = icon("power.circle")
+        launchAtLoginItem.target = self
+        launchAtLoginItem.state = isLaunchAtLoginEnabled ? .on : .off
+        menu.addItem(launchAtLoginItem)
+
+        // 权限与帮助
+        let helpItem = NSMenuItem(title: loc("menu.help"),
+                                  action: #selector(openPermissions(_:)),
+                                  keyEquivalent: "")
+        helpItem.image = hasAllPermissions ? icon("checkmark.shield") : icon("exclamationmark.shield")
+        helpItem.target = self
+        menu.addItem(helpItem)
+
+        menu.addItem(.separator())
+
         let aboutItem = NSMenuItem(title: loc("menu.about"), action: #selector(openAbout(_:)), keyEquivalent: "")
         aboutItem.image = icon("info.circle")
         aboutItem.target = self
@@ -143,6 +167,21 @@ final class MenuBarController {
         menu.addItem(quitItem)
 
         statusItem.menu = menu
+    }
+
+    // MARK: - Launch at Login
+
+    private var isLaunchAtLoginEnabled: Bool {
+        if #available(macOS 13.0, *) {
+            return SMAppService.mainApp.status == .enabled
+        }
+        return false
+    }
+
+    private var hasAllPermissions: Bool {
+        AVCaptureDevice.authorizationStatus(for: .audio) == .authorized &&
+        SFSpeechRecognizer.authorizationStatus() == .authorized &&
+        AXIsProcessTrusted()
     }
 
     private func icon(_ name: String) -> NSImage? {
@@ -185,6 +224,26 @@ final class MenuBarController {
             settingsWindow = SettingsWindowController(llmRefiner: llmRefiner)
         }
         settingsWindow?.showWindow()
+    }
+
+    @objc private func toggleLaunchAtLogin(_ sender: NSMenuItem) {
+        if #available(macOS 13.0, *) {
+            do {
+                if isLaunchAtLoginEnabled {
+                    try SMAppService.mainApp.unregister()
+                } else {
+                    try SMAppService.mainApp.register()
+                }
+            } catch {
+                print("[LaunchAtLogin] Error: \(error)")
+            }
+        }
+        rebuildMenu()
+    }
+
+    @objc private func openPermissions(_ sender: NSMenuItem) {
+        if permissionsWindow == nil { permissionsWindow = PermissionsWindowController() }
+        permissionsWindow?.showWindow()
     }
 
     @objc private func openAbout(_ sender: NSMenuItem) {

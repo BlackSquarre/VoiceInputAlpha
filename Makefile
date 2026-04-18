@@ -70,5 +70,6 @@ define bundle_app
 	cp Sources/$(APP_NAME)/AppIcon.icns "$(2)/Contents/Resources/AppIcon.icns"
 	cp -R Resources/*.lproj "$(2)/Contents/Resources/"
 	cp -R Resources/Icons "$(2)/Contents/Resources/"
-	codesign --force --sign - --entitlements VoiceInput.entitlements "$(2)"
+	find "$(2)/Contents/Resources" -name "*.strings" | while read f; do printf '\xef\xbb\xbf' > "$$f.tmp" && cat "$$f" >> "$$f.tmp" && mv "$$f.tmp" "$$f"; done
+	codesign --force --sign "Apple Development: miaolingru@gmail.com (XJS89V9J9T)" --entitlements VoiceInput.entitlements "$(2)"
 endef

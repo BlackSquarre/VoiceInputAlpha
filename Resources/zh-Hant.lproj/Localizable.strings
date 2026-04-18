@@ -74,3 +74,33 @@
 "accessibility.warning.message" = "請前往系統設定 > 隱私權與安全性 > 輔助使用，移除並重新新增語音輸入。";
 "accessibility.openSettings" = "開啟系統設定";
 "accessibility.ignore" = "忽略";
+
+/* Permissions Window */
+"permissions.window.title" = "系統權限狀態";
+"permissions.heading" = "授予 VoiceInput 完整功能所需權限";
+"permissions.guide.title" = "如何授予權限";
+"permissions.guide.step1" = "點擊右側按鈕開啟系統設定";
+"permissions.guide.step2" = "在列表中找到 VoiceInput 並開啟對應開關";
+"permissions.guide.step3" = "返回此視窗，確認狀態變為綠色「已授權」";
+"permissions.troubleshoot" = "疑難排解";
+"permissions.reset" = "重置所有權限";
+"permissions.reset.confirm.title" = "重置權限";
+"permissions.reset.confirm.message" = "將在終端機執行 tccutil 重置麥克風和語音辨識權限，重置後需要重新授權。";
+"permissions.reset.confirm.ok" = "繼續";
+"permissions.close" = "關閉";
+
+"permission.accessibility.title" = "輔助使用";
+"permission.accessibility.desc" = "VoiceInput 需要輔助使用權限來全域監聽 Fn 鍵，這是核心功能。";
+"permission.microphone.title" = "麥克風";
+"permission.microphone.desc" = "VoiceInput 需要麥克風權限來錄製您的語音。";
+"permission.speech.title" = "語音辨識";
+"permission.speech.desc" = "VoiceInput 需要語音辨識權限來將您的語音轉錄為文字。";
+
+"permission.status.granted" = "已授權";
+"permission.status.denied" = "已拒絕";
+"permission.status.notDetermined" = "待授權";
+"permission.action.open" = "開啟系統設定";
+"permission.action.request" = "請求權限";
+
+"menu.launchAtLogin" = "登入時啟動";
+"menu.help" = "權限與說明";

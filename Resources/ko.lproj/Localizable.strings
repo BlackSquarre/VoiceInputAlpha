@@ -54,7 +54,7 @@
 "about.version" = "버전 %@ (%@)";
 "about.bilibili" = "Bilibili";
 "about.github" = "GitHub 프로젝트";
-"about.copyright" = "© 2026 缪凌儒. All rights reserved.";
+"about.copyright" = "© 2026 缪凌儒BlackSquare\nAll rights reserved.";
 
 /* Errors */
 "error.noApiKey" = "API 키가 설정되지 않았습니다";
@@ -74,3 +74,33 @@
 "accessibility.warning.message" = "시스템 설정 > 개인 정보 보호 및 보안 > 손쉬운 사용에서 VoiceInput을 제거하고 다시 추가해 주세요.";
 "accessibility.openSettings" = "시스템 설정 열기";
 "accessibility.ignore" = "무시";
+
+/* Permissions Window */
+"permissions.window.title" = "시스템 권한 상태";
+"permissions.heading" = "VoiceInput에 필요한 권한을 허용해 주세요";
+"permissions.guide.title" = "권한 허용 방법";
+"permissions.guide.step1" = "오른쪽 버튼을 클릭하여 시스템 설정 열기";
+"permissions.guide.step2" = "목록에서 VoiceInput을 찾아 스위치를 켜기";
+"permissions.guide.step3" = "이 창으로 돌아와 상태가 녹색 「허용됨」으로 바뀌었는지 확인";
+"permissions.troubleshoot" = "문제 해결";
+"permissions.reset" = "모든 권한 재설정";
+"permissions.reset.confirm.title" = "권한 재설정";
+"permissions.reset.confirm.message" = "터미널에서 tccutil을 실행하여 마이크 및 음성 인식 권한을 재설정합니다. 재설정 후 다시 허용해야 합니다.";
+"permissions.reset.confirm.ok" = "계속";
+"permissions.close" = "닫기";
+
+"permission.accessibility.title" = "손쉬운 사용";
+"permission.accessibility.desc" = "VoiceInput은 Fn 키를 전역으로 모니터링하기 위해 손쉬운 사용 권한이 필요합니다. 이것은 핵심 기능입니다.";
+"permission.microphone.title" = "마이크";
+"permission.microphone.desc" = "VoiceInput은 음성을 녹음하기 위해 마이크 권한이 필요합니다.";
+"permission.speech.title" = "음성 인식";
+"permission.speech.desc" = "VoiceInput은 음성을 텍스트로 변환하기 위해 음성 인식 권한이 필요합니다.";
+
+"permission.status.granted" = "허용됨";
+"permission.status.denied" = "거부됨";
+"permission.status.notDetermined" = "미결정";
+"permission.action.open" = "시스템 설정 열기";
+"permission.action.request" = "권한 요청";
+
+"menu.launchAtLogin" = "로그인 시 시작";
+"menu.help" = "권한 및 도움말";

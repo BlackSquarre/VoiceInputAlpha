@@ -74,3 +74,33 @@
 "accessibility.warning.message" = "Please go to System Settings > Privacy & Security > Accessibility, remove and re-add VoiceInput.";
 "accessibility.openSettings" = "Open System Settings";
 "accessibility.ignore" = "Ignore";
+
+/* Permissions Window */
+"permissions.window.title" = "System Permission Status";
+"permissions.heading" = "Grant permissions required for VoiceInput";
+"permissions.guide.title" = "How to grant permissions";
+"permissions.guide.step1" = "Click the button on the right to open System Settings";
+"permissions.guide.step2" = "Find VoiceInput in the list and enable the toggle";
+"permissions.guide.step3" = "Return here and confirm the status turns green (Granted)";
+"permissions.troubleshoot" = "Troubleshooting";
+"permissions.reset" = "Reset All Permissions";
+"permissions.reset.confirm.title" = "Reset Permissions";
+"permissions.reset.confirm.message" = "This will run tccutil in Terminal to reset microphone and speech recognition permissions. You will need to re-authorize afterward.";
+"permissions.reset.confirm.ok" = "Continue";
+"permissions.close" = "Close";
+
+"permission.accessibility.title" = "Accessibility";
+"permission.accessibility.desc" = "VoiceInput requires Accessibility permission to monitor the Fn key globally. This is the core feature.";
+"permission.microphone.title" = "Microphone";
+"permission.microphone.desc" = "VoiceInput requires Microphone permission to record your voice.";
+"permission.speech.title" = "Speech Recognition";
+"permission.speech.desc" = "VoiceInput requires Speech Recognition permission to transcribe your voice to text.";
+
+"permission.status.granted" = "Granted";
+"permission.status.denied" = "Denied";
+"permission.status.notDetermined" = "Not Determined";
+"permission.action.open" = "Open System Settings";
+"permission.action.request" = "Request Permission";
+
+"menu.launchAtLogin" = "Launch at Login";
+"menu.help" = "Permissions & Help";

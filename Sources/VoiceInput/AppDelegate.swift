@@ -49,6 +49,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fnKeyMonitor.start()
     }
 
+    // MARK: - Window activation helpers
+
+    /// 在 LSUIElement=true (accessory) 模式下，普通 activate() 不会夺焦。
+    /// 显示任何普通窗口前调用此函数切换策略并强制置前。
+    static func bringToFront(_ window: NSWindow) {
+        NSApp.setActivationPolicy(.regular)
+        DispatchQueue.main.async {
+            window.makeKeyAndOrderFront(nil)
+            if #available(macOS 14.0, *) { NSApp.activate() }
+            else { NSApp.activate(ignoringOtherApps: true) }
+        }
+    }
+
+    /// 窗口关闭时调用：若已无其他普通窗口可见，恢复 accessory 策略。
+    static func resetActivationIfNeeded(closing: NSWindow) {
+        let hasOther = NSApp.windows.contains {
+            $0 !== closing && $0.isVisible && $0.styleMask.contains(.titled)
+        }
+        if !hasOther { NSApp.setActivationPolicy(.accessory) }
+    }
+
     private func requestPermissions() {
         AVCaptureDevice.requestAccess(for: .audio) { granted in
             if !granted {

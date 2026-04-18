@@ -265,9 +265,7 @@ final class SettingsWindowController: NSObject {
     func showWindow() {
         if let w = window {
             refreshFields()
-            w.makeKeyAndOrderFront(nil)
-            if #available(macOS 14.0, *) { NSApp.activate() }
-            else { NSApp.activate(ignoringOtherApps: true) }
+            AppDelegate.bringToFront(w)
             return
         }
         buildWindow()
@@ -393,12 +391,11 @@ final class SettingsWindowController: NSObject {
         bottomRow.widthAnchor.constraint(equalTo: vStack.widthAnchor).isActive = true
 
         self.window = w
+        w.delegate = self
         refreshFields()
         w.center()
         w.recalculateKeyViewLoop()
-        w.makeKeyAndOrderFront(nil)
-        if #available(macOS 14.0, *) { NSApp.activate() }
-        else { NSApp.activate(ignoringOtherApps: true) }
+        AppDelegate.bringToFront(w)
     }
 
     // MARK: - Helpers
@@ -504,5 +501,13 @@ final class SettingsWindowController: NSObject {
 
     @objc private func cancelSettings(_ sender: NSButton) {
         window?.close()
+    }
+}
+
+extension SettingsWindowController: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        if let w = notification.object as? NSWindow {
+            AppDelegate.resetActivationIfNeeded(closing: w)
+        }
     }
 }
