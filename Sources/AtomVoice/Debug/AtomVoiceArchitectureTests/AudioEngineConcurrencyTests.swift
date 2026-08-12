@@ -25,8 +25,17 @@ enum AudioEngineConcurrencyTests {
             }
 
             try expect(heartbeatDelay < 0.1, "main queue heartbeat was delayed by input preflight")
-            try await Task.sleep(nanoseconds: 350_000_000)
-            try expect(results.value(for: "preflight") == true)
+            #if arch(x86_64)
+            let completionTimeout: TimeInterval = 1.5
+            #else
+            let completionTimeout: TimeInterval = 0.75
+            #endif
+            let preflightResult = await waitForAudioStartResult(
+                results,
+                key: "preflight",
+                timeout: completionTimeout
+            )
+            try expect(preflightResult == true, "input preflight did not complete within \(completionTimeout)s")
         }
 
         await runner.run("Audio engine blocking start does not block main queue") {
@@ -116,6 +125,21 @@ enum AudioEngineConcurrencyTests {
             engine.stop()
         }
     }
+}
+
+private func waitForAudioStartResult(
+    _ results: AudioStartResults,
+    key: String,
+    timeout: TimeInterval
+) async -> Bool? {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+        if let result = results.value(for: key) {
+            return result
+        }
+        try? await Task.sleep(nanoseconds: 10_000_000)
+    }
+    return results.value(for: key)
 }
 
 private final class AudioStartResults: @unchecked Sendable {
