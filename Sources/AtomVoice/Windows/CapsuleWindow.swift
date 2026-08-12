@@ -818,6 +818,7 @@ final class CapsuleWindowController {
 
     /// 显示错误提示，一段时间后自动消失。（Show error message, auto-dismiss after a delay.）
     func showError(_ message: String, dismissAfter delay: TimeInterval = 3) {
+        ensureVisible()
         let currentPanel = panel
         let currentPresentationID = presentationID
         isShowingError = true
@@ -899,8 +900,8 @@ final class CapsuleWindowController {
     // MARK: - Dismiss
 
     func dismiss(completion: (() -> Void)? = nil) {
-        guard let panel = panel else { completion?(); return }
         isShowingError = false
+        guard let panel = panel else { completion?(); return }
         animationStrategy.stop()
         animationStrategy.dismiss(host: makeDismissHost(panel: panel, completion: completion))
     }

@@ -1,6 +1,8 @@
 import Foundation
 
 protocol DownloadCapsulePresenting: AnyObject {
+    var presentationID: Int { get }
+    var isShowingDownloadPresentation: Bool { get }
     func showDownloadProgress(_ text: String, progress: Double)
     func updateText(_ text: String, completion: (() -> Void)?)
     func showError(_ message: String, dismissAfter: TimeInterval)
@@ -106,9 +108,17 @@ final class SherpaDownloadCapsulePresenter: SherpaDownloadReporting {
             return
         }
         if success {
-            capsulePresenter?.updateText(loc(successMessageKey), completion: nil)
+            let message = loc(successMessageKey)
+            capsulePresenter?.showDownloadProgress(message, progress: 1)
+            let completionPresentationID = capsulePresenter?.presentationID
             scheduleAfter(2) { [weak self] in
-                self?.capsulePresenter?.dismiss(completion: nil)
+                guard let self,
+                      !self.isRecording(),
+                      let completionPresentationID,
+                      self.capsulePresenter?.presentationID == completionPresentationID,
+                      self.capsulePresenter?.isShowingDownloadPresentation == true
+                else { return }
+                self.capsulePresenter?.dismiss(completion: nil)
             }
         } else {
             capsulePresenter?.showError(loc(failureMessageKey, error ?? "Unknown error"), dismissAfter: 6)

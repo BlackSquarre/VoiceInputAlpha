@@ -437,7 +437,6 @@ struct RecordingStateMachine {
             next.liveInsertion.latestText = latestText
             next.liveInsertion.committedText += segment
             next.liveInsertion.pasteInFlight = true
-            effects.append(.deliverText(segment))
 
         case .liveInsertionCommitFinished:
             next.liveInsertion.pasteInFlight = false

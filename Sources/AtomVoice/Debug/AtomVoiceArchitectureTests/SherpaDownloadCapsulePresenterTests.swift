@@ -81,11 +81,28 @@ enum SherpaDownloadCapsulePresenterTests {
 
             presenter.finishDownload(success: true, error: nil)
 
-            try expect(capsule.events == ["update:\(loc("sherpa.download.complete"))"])
+            try expect(capsule.events == ["progress:1.00:\(loc("sherpa.download.complete"))"])
             try expect(scheduled.count == 1)
             try expect(scheduled.first?.0 == 2)
             scheduled.first?.1()
-            try expect(capsule.events == ["update:\(loc("sherpa.download.complete"))", "dismiss"])
+            try expect(capsule.events == ["progress:1.00:\(loc("sherpa.download.complete"))", "dismiss"])
+        }
+
+        await runner.run("download completion dismiss does not close a newer presentation") {
+            let capsule = FakeDownloadCapsulePresenter()
+            var scheduled: [() -> Void] = []
+            let presenter = SherpaDownloadCapsulePresenter(
+                capsulePresenter: capsule,
+                isRecording: { false },
+                now: { Date(timeIntervalSince1970: 1) },
+                scheduleAfter: { _, action in scheduled.append(action) }
+            )
+
+            presenter.finishDownload(success: true, error: nil)
+            capsule.showNewRecordingPresentation()
+            scheduled.first?()
+
+            try expect(!capsule.events.contains("dismiss"))
         }
 
         await runner.run("finishDownload shows error capsule on failure") {
@@ -188,8 +205,14 @@ enum SherpaDownloadCapsulePresenterTests {
 
 private final class FakeDownloadCapsulePresenter: DownloadCapsulePresenting {
     private(set) var events: [String] = []
+    private(set) var presentationID = 0
+    private(set) var isShowingDownloadPresentation = false
 
     func showDownloadProgress(_ text: String, progress: Double) {
+        if !isShowingDownloadPresentation {
+            presentationID += 1
+        }
+        isShowingDownloadPresentation = true
         events.append(String(format: "progress:%0.2f:%@", progress, text))
     }
 
@@ -203,7 +226,14 @@ private final class FakeDownloadCapsulePresenter: DownloadCapsulePresenting {
     }
 
     func dismiss(completion: (() -> Void)?) {
+        isShowingDownloadPresentation = false
         events.append("dismiss")
         completion?()
+    }
+
+    func showNewRecordingPresentation() {
+        presentationID += 1
+        isShowingDownloadPresentation = false
+        events.append("recording")
     }
 }

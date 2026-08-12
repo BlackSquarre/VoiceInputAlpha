@@ -528,7 +528,7 @@ enum RecordingStateMachineTests {
             try expect(committed.state.liveInsertion.committedText == "hello.")
             try expect(committed.state.liveInsertion.latestText == "hello.")
             try expect(committed.state.liveInsertion.pasteInFlight)
-            try expect(committed.sideEffects == [.deliverText("hello.")])
+            try expect(committed.sideEffects.isEmpty)
         }
         await runner.run("Recording state machine clears live insertion after paste") {
             var state = RecordingSessionState()
@@ -745,10 +745,9 @@ enum RecordingStateMachineTests {
                 .liveInsertionCommitFinished,
             ])
 
-            try expect(snapshot.effects.count == 10)
+            try expect(snapshot.effects.count == 9)
             try expect(snapshot.effects[0] == .waitForInputReady(request: 1))
             try expect(snapshot.effects[7] == .startSession(generation: 1))
-            try expect(snapshot.effects[9] == .deliverText("hello"))
             try expect(snapshot.state.phase == .capturing)
             try expect(snapshot.state.liveInsertion.isActive)
             try expect(snapshot.state.liveInsertion.committedText == "hello")

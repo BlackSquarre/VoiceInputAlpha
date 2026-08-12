@@ -178,6 +178,26 @@ enum CapsuleAnimationTests {
             try expect(result.4 == .center)
             try expect(result.5 < 1)
         }
+        await runner.run("Capsule error creates a missing panel and nil-panel dismiss clears error state") {
+            let result = await MainActor.run { () -> (Bool, Bool, Bool) in
+                let controller = CapsuleWindowController()
+                controller.showError("Failed", dismissAfter: 60)
+                let createdPanel = controller.panel
+                let becameVisible = createdPanel != nil
+                let showedError = controller.isShowingError
+
+                controller.panel = nil
+                controller.dismiss()
+                let clearedError = !controller.isShowingError
+                createdPanel?.orderOut(nil)
+                controller.cleanup()
+                return (becameVisible, showedError, clearedError)
+            }
+
+            try expect(result.0)
+            try expect(result.1)
+            try expect(result.2)
+        }
         await runner.run("Capsule saved placement survives text-width changes") {
             let defaults = UserDefaults.standard
             let oldStyle = defaults.object(forKey: AppSettings.Keys.animationStyle)
