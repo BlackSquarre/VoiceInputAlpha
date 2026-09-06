@@ -87,7 +87,7 @@ enum RecordingSessionControllerTests {
             try expect(harness.presenter.events.contains(.updateText("hello")))
         }
 
-        await runner.run("Recording session ignores a late start failure after stop") {
+        await runner.run("Recording session ignores a late start failure after cancel") {
             let settings = RecordingSessionTestSettings()
             settings.apply()
             defer { settings.restore() }
@@ -102,7 +102,7 @@ enum RecordingSessionControllerTests {
             try await waitForAsyncCallbacks()
             try expect(recognitionSession.startCallCount == 1)
 
-            harness.controller.stop()
+            harness.controller.cancel()
             try await waitForAsyncCallbacks()
             recognitionSession.completeNextStart(
                 with: .failed(
@@ -125,6 +125,66 @@ enum RecordingSessionControllerTests {
                     return false
                 }
             )
+        }
+
+        await runner.run("Recording UI responds while ASR preflight is pending") {
+            let settings = RecordingSessionTestSettings()
+            settings.apply()
+            defer { settings.restore() }
+            let session = FakeRecognitionSession()
+            session.completesPreparationImmediately = false
+            let harness = RecordingSessionHarness(session: session)
+            defer { harness.tearDown() }
+            harness.controller.start()
+            try expect(harness.presenter.events.contains(.showInitial(compactStatusKey: nil)))
+            try await waitForAsyncCallbacks()
+            try expect(session.startCallCount == 0)
+            harness.controller.stop()
+            try expect(!harness.controller.isRecordingOrStarting)
+            session.completePreparation()
+            try await waitForAsyncCallbacks()
+            try await waitForAsyncCallbacks()
+            try expect(session.startCallCount == 1)
+            try expect(session.stopCallCount == 1)
+        }
+
+        await runner.run("Release while ASR starts waits for readiness without reopening UI") {
+            let settings = RecordingSessionTestSettings()
+            settings.apply()
+            defer { settings.restore() }
+            let session = FakeRecognitionSession()
+            session.completesStartImmediately = false
+            let harness = RecordingSessionHarness(session: session)
+            defer { harness.tearDown() }
+            harness.controller.start()
+            try await waitForAsyncCallbacks()
+            harness.controller.stop()
+            try expect(session.stopCallCount == 0)
+            session.completeNextStart()
+            try await waitForAsyncCallbacks()
+            try expect(session.stopCallCount == 1)
+            try expect(!harness.controller.isRecordingOrStarting)
+        }
+
+        await runner.run("Late final cannot interrupt next recording input startup") {
+            let settings = RecordingSessionTestSettings()
+            settings.apply()
+            defer { settings.restore() }
+            let session = FakeRecognitionSession(currentText: "old")
+            session.completesStopImmediately = false
+            let harness = RecordingSessionHarness(session: session)
+            defer { harness.tearDown() }
+            harness.controller.start()
+            try await waitForAsyncCallbacks()
+            harness.controller.stop()
+            try await waitForAsyncCallbacks()
+            harness.controller.start()
+            session.completeStop()
+            try expect(harness.controller.state.isStarting)
+            try expect(harness.outputSink.deliveredTexts.isEmpty)
+            try await waitForAsyncCallbacks()
+            try expect(harness.controller.isRecording)
+            harness.controller.cancel()
         }
 
         await runner.run("Recording session fixture delivers output side effect through fake sink") {

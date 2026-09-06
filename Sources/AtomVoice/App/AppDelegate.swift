@@ -64,11 +64,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         textInjector = TextInjector()
         capsuleWindow = CapsuleWindowController()
         capsuleWindow.onRecordingClick = { [weak self] in
-            guard let self, self.session.isRecording else { return }; self.session.stop()
+            guard let self, self.session.isRecordingOrStarting else { return }; self.session.stop()
         }
         audioEngine = AudioEngineController()
         textPostProcessorRegistry = TextPostProcessorRegistry(processors: [
-            SherpaPunctuationProcessor(registry: asrEngineRegistry) { [weak self] text in self?.asrEngineProvider.sherpaEngine().punctuate(text) },
+            SherpaPunctuationProcessor(registry: asrEngineRegistry, asyncPunctuator: { [weak self] text, completion in
+                guard let self else { completion(nil); return }
+                self.asrEngineProvider.sherpaEngine().punctuateAsync(text, completion: completion)
+            }) { _ in nil },
             HeuristicPunctuationProcessor(),
         ])
         textOutputSinkRegistry = TextOutputSinkRegistry(sinks: [
@@ -89,7 +92,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         session.delegate = self
         sherpaDownloadCapsulePresenter = SherpaDownloadCapsulePresenter(
             capsuleWindow: capsuleWindow,
-            isRecording: { [weak self] in self?.session.isRecording == true }
+            isRecording: { [weak self] in self?.session.isRecordingOrStarting == true }
         )
         sherpaLifecycle = SherpaLifecycleCoordinator(
             registry: asrEngineRegistry,

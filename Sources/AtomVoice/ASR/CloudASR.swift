@@ -141,7 +141,15 @@ final class CloudASRRecognizerController: NSObject {
     private var chunkBuffer = Data()
     private var state: State = .idle
     private var finishAfterConnect = false
-    private var lastText = ""
+    private let textLock = NSLock()
+    private var textSnapshot = ""
+    private var lastText = "" {
+        didSet {
+            textLock.lock()
+            textSnapshot = lastText
+            textLock.unlock()
+        }
+    }
     private var finishCompletion: ((String, String?) -> Void)?
     private var onResult: ((String, Bool) -> Void)?
     private var onError: ((String) -> Void)?
@@ -153,7 +161,8 @@ final class CloudASRRecognizerController: NSObject {
     }
 
     var currentText: String {
-        queue.sync { lastText }
+        textLock.lock(); defer { textLock.unlock() }
+        return textSnapshot
     }
 
     var engineCode: String { provider.engineCode }

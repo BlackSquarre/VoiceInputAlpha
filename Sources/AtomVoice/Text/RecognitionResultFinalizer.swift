@@ -51,6 +51,7 @@ final class RecognitionResultFinalizer {
         let streamSession: TextStreamSession?
         let clearStreamSession: () -> Void
         let generation: Int
+        var preparedText: String? = nil
     }
 
     private let presenter: RecognitionResultPresenting
@@ -82,6 +83,23 @@ final class RecognitionResultFinalizer {
             liveInsertion: request.liveInsertion
         )
 
+        if request.engineCode == ASREngineRegistry.sherpaCode, !rawText.isEmpty {
+            let immediate: Bool
+            if case .immediate = request.mode { immediate = true } else { immediate = false }
+            let context = TextProcessingContext(engineCode: request.engineCode,
+                language: settingsProvider().language, isImmediateFinish: immediate)
+            textPostProcessorRegistry.runAsync(rawText, context: context) { [weak self] text in
+                guard let self, self.isGenerationValid(request.generation) else { return }
+                var prepared = request
+                prepared.preparedText = text
+                self.finishPrepared(prepared, rawText: rawText)
+            }
+            return
+        }
+        finishPrepared(request, rawText: rawText)
+    }
+
+    private func finishPrepared(_ request: Request, rawText: String) {
         switch request.mode {
         case .normal:
             finishRecording(rawText: rawText, errorMessage: request.errorMessage, request: request)
@@ -260,7 +278,7 @@ final class RecognitionResultFinalizer {
             language: settings.language,
             isImmediateFinish: isImmediateFinish
         )
-        let processedText = textPostProcessorRegistry.run(rawText, context: context)
+        let processedText = request.preparedText ?? textPostProcessorRegistry.run(rawText, context: context)
         if processedText != rawText {
             presenter.updateRecognitionText(processedText)
         }

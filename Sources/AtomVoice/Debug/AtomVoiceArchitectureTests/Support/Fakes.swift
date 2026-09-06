@@ -216,6 +216,8 @@ final class FakeRecognitionSession: RecognitionSession {
     var preflightResult: RecognitionSessionPreflightResult = .ready
     var startResult: RecognitionSessionStartResult = .started
     var completesStartImmediately = true
+    var completesPreparationImmediately = true
+    private var pendingPreparation: ((RecognitionSessionPreflightResult) -> Void)?
     var stopResult: RecognitionSessionStopResult?
     var completesStopImmediately = true
 
@@ -249,6 +251,17 @@ final class FakeRecognitionSession: RecognitionSession {
         self.supportsSilenceMonitoring = supportsSilenceMonitoring
         self.requiresModelReloadOnRouteChange = requiresModelReloadOnRouteChange
         self.preferredAudioFormat = preferredAudioFormat
+    }
+
+    func prepare(completion: @escaping (RecognitionSessionPreflightResult) -> Void) {
+        if completesPreparationImmediately { completion(preflightResult) }
+        else { pendingPreparation = completion }
+    }
+
+    func completePreparation() {
+        let callback = pendingPreparation
+        pendingPreparation = nil
+        callback?(preflightResult)
     }
 
     func preflight() -> RecognitionSessionPreflightResult {

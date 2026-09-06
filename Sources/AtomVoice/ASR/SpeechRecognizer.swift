@@ -5,6 +5,7 @@ final class SpeechRecognizerController {
     private var recognizer: SFSpeechRecognizer?
     private(set) var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
+    private let taskCreationQueue = DispatchQueue(label: "com.atomvoice.appleSpeech.prepare", qos: .userInitiated)
 
     // 分段续录（Rolling segmentation）
     private var segmentOffset: String = ""     // 已完成分段的累积文字（Accumulated text from completed segments）
@@ -244,23 +245,33 @@ final class SpeechRecognizerController {
     private func startTask(request: SFSpeechAudioBufferRecognitionRequest, taskID: Int) {
         guard let recognizer else { return }
 
-        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            DispatchQueue.main.async {
-                guard let self, taskID == self.activeTaskID else { return }
+        // 请求先接收音频；可能涉及系统服务 IPC 的任务创建移到后台。
+        taskCreationQueue.async { [weak self] in
+            let task = recognizer.recognitionTask(with: request) { [weak self] result, error in
+                DispatchQueue.main.async {
+                    guard let self, taskID == self.activeTaskID else { return }
 
-                if let result {
-                    self.currentSegmentText = result.bestTranscription.formattedString
-                    let fullText = self.currentText
-                    self.onResult?(fullText, result.isFinal)
-                }
-                if let error {
-                    let nsError = error as NSError
-                    // 216 = 用户取消，属正常流程，不打印（216 = user cancellation, normal flow, do not print）
-                    if !Self.isBenignCancellation(nsError) {
-                        DebugLog.error("[SpeechRecognizer] Error: \(error.localizedDescription)")
-                        self.onError?(error.localizedDescription)
+                    if let result {
+                        self.currentSegmentText = result.bestTranscription.formattedString
+                        let fullText = self.currentText
+                        self.onResult?(fullText, result.isFinal)
+                    }
+                    if let error {
+                        let nsError = error as NSError
+                        // 216 = 用户取消，属正常流程，不打印（216 = user cancellation, normal flow, do not print）
+                        if !Self.isBenignCancellation(nsError) {
+                            DebugLog.error("[SpeechRecognizer] Error: \(error.localizedDescription)")
+                            self.onError?(error.localizedDescription)
+                        }
                     }
                 }
+            }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, taskID == self.activeTaskID, self.recognitionRequest === request else {
+                    task.cancel()
+                    return
+                }
+                self.recognitionTask = task
             }
         }
     }

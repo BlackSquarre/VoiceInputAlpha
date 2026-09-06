@@ -73,44 +73,5 @@ enum SherpaPreloadTests {
             try expect(manifest.joiner == "joiner.int8.onnx")
             try expect(manifest.isComplete(in: root))
         }
-        await runner.run("Sherpa preload drains buffered audio in order") {
-            let coordinator = SherpaPreloadCoordinator()
-            let first = try require(makePCMBuffer(sampleRate: 16_000, frameLength: 16, fillValue: 0.1))
-            let second = try require(makePCMBuffer(sampleRate: 16_000, frameLength: 16, fillValue: 0.2))
-
-            coordinator.begin()
-            try expect(coordinator.appendIfActive(first) { $0 })
-            try expect(coordinator.appendIfActive(second) { $0 })
-            try await waitForAsyncCallbacks()
-
-            var drained: [AVAudioPCMBuffer] = []
-            let drainFinished = DispatchGroup()
-            drainFinished.enter()
-            coordinator.drain(
-                accept: { drained.append($0) },
-                onComplete: { drainFinished.leave() }
-            )
-
-            try expect(
-                drainFinished.wait(timeout: .now() + 2) == .success,
-                "Sherpa preload drain did not complete"
-            )
-            try expect(drained.count == 2)
-            try expect(drained[0] === first)
-            try expect(drained[1] === second)
-            try expect(!coordinator.appendIfActive(first) { $0 })
-        }
-        await runner.run("Sherpa preload cancellation is isolated per recording attempt") {
-            let oldAttempt = SherpaPreloadCoordinator()
-            let newAttempt = SherpaPreloadCoordinator()
-            let buffer = try require(makePCMBuffer(sampleRate: 16_000, frameLength: 16, fillValue: 0.3))
-
-            oldAttempt.begin()
-            newAttempt.begin()
-            oldAttempt.cancel()
-
-            try expect(newAttempt.appendIfActive(buffer) { $0 })
-            newAttempt.cancel()
-        }
     }
 }

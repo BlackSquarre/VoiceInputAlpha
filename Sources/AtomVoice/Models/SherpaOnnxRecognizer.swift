@@ -32,6 +32,10 @@ final class SherpaOnnxRecognizerController {
     /// 串行化模型加载，防止快速点按 Fn 期间并发触发多次 AtomVoiceSherpaCreate 导致重复加载模型
     /// (Serializes model loading to prevent rapid Fn taps from triggering concurrent AtomVoiceSherpaCreate calls)
     private let loadingLock = NSLock()
+    private let snapshotLock = NSLock()
+    private var loadedSnapshot = false
+    private var textSnapshot = ""
+    private var audioGeneration = 0
     private var context: OpaquePointer?
     private var punctuationContext: OpaquePointer?
     private var onResult: ((String, Bool) -> Void)?
@@ -39,11 +43,13 @@ final class SherpaOnnxRecognizerController {
     private var finalText = ""
     private(set) var lastStartFailureKind: SherpaOnnxStartFailureKind?
     var isModelLoaded: Bool {
-        queue.sync { context != nil }
+        snapshotLock.lock(); defer { snapshotLock.unlock() }
+        return loadedSnapshot
     }
 
     var currentText: String {
-        queue.sync { finalText }
+        snapshotLock.lock(); defer { snapshotLock.unlock() }
+        return textSnapshot
     }
 
     deinit {
@@ -66,6 +72,7 @@ final class SherpaOnnxRecognizerController {
                 AtomVoiceSherpaPunctuationDestroy(punctuationContext)
                 self.punctuationContext = nil
             }
+            updateSnapshot()
             DebugLog.info("[SherpaOnnx] Released model context")
         }
     }
@@ -109,6 +116,7 @@ final class SherpaOnnxRecognizerController {
                 self.onResult = onResult
                 lastText = ""
                 finalText = ""
+                updateSnapshot()
             }
             return nil
         }
@@ -123,6 +131,7 @@ final class SherpaOnnxRecognizerController {
                 self.onResult = onResult
                 lastText = ""
                 finalText = ""
+                updateSnapshot()
             }
             return nil
         }
@@ -209,6 +218,7 @@ final class SherpaOnnxRecognizerController {
             // 失败不致命（用户可能没下载标点模型），会回退到启发式标点。
             // (Load punctuation alongside main recognizer to avoid a +200MB spike at stop. Failure is OK — heuristic fallback kicks in.)
             _ = ensurePunctuationContext()
+            updateSnapshot()
         }
         return nil
     }
@@ -230,8 +240,11 @@ final class SherpaOnnxRecognizerController {
     func accept(buffer: AVAudioPCMBuffer) {
         guard let input = copyMonoSamples(from: buffer) else { return }
 
+        snapshotLock.lock()
+        let generation = audioGeneration
+        snapshotLock.unlock()
         queue.async { [weak self] in
-            guard let self, let context = self.context else { return }
+            guard let self, self.acceptsAudioGeneration(generation), let context = self.context else { return }
 
             let text: String? = input.samples.withUnsafeBufferPointer { samplesPtr in
                 guard let baseAddress = samplesPtr.baseAddress else { return nil }
@@ -254,8 +267,11 @@ final class SherpaOnnxRecognizerController {
             guard let text, !text.isEmpty, text != self.lastText else { return }
             self.lastText = text
             self.finalText = text
+            self.updateSnapshot()
+            let callback = self.onResult
             DispatchQueue.main.async { [weak self] in
-                self?.onResult?(text, false)
+                guard self?.acceptsAudioGeneration(generation) == true else { return }
+                callback?(text, false)
             }
         }
     }
@@ -275,8 +291,41 @@ final class SherpaOnnxRecognizerController {
             }
             onResult = nil
             lastText = ""
+            updateSnapshot()
             return finalText
         }
+    }
+
+    /// 取消立即使积压音频失效；清理在后台执行，不再调用 Finish 做无用的最终解码。
+    func invalidatePendingAudio() {
+        snapshotLock.lock()
+        audioGeneration += 1
+        snapshotLock.unlock()
+    }
+
+    func cancel() {
+        queue.sync {
+            if let context, AtomVoiceSherpaResetStream(context) == 0 {
+                AtomVoiceSherpaDestroy(context)
+                self.context = nil
+            }
+            onResult = nil
+            lastText = ""
+            finalText = ""
+            updateSnapshot()
+        }
+    }
+
+    private func acceptsAudioGeneration(_ generation: Int) -> Bool {
+        snapshotLock.lock(); defer { snapshotLock.unlock() }
+        return audioGeneration == generation
+    }
+
+    private func updateSnapshot() {
+        snapshotLock.lock()
+        loadedSnapshot = context != nil
+        textSnapshot = finalText
+        snapshotLock.unlock()
     }
 
     func punctuate(_ text: String) -> String? {

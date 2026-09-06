@@ -4,12 +4,13 @@ import Foundation
 extension RecordingSessionController {
     func makeRecognitionSessionCallbacks(generation: Int) -> RecognitionSessionCallbacks {
         RecognitionSessionCallbacks(
+            audioInput: recordingAudioInput,
             isCurrent: { [weak self] in
                 self?.recordingGeneration == generation
             },
             isRecordingCurrent: { [weak self] in
                 guard let self else { return false }
-                return self.isRecording && self.recordingGeneration == generation
+                return self.isRecording && !self.pendingStopForPresentation && self.recordingGeneration == generation
             },
             copyAudioBuffer: { [weak self] buffer in
                 self?.copyAudioBuffer(buffer)
@@ -24,13 +25,13 @@ extension RecordingSessionController {
                 self?.showCapsuleError(message, dismissAfter: 5)
             },
             onShowInitial: { [weak self] in
-                self?.showInitialCapsule()
+                if self?.pendingStopForPresentation != true { self?.showInitialCapsule() }
             },
             onShowRecording: { [weak self] in
-                self?.showRecordingCapsule()
+                if self?.pendingStopForPresentation != true { self?.showRecordingCapsule() }
             },
             onProgress: { [weak self] text, hidesWaveform in
-                self?.showCapsuleProgress(text, hidesWaveform: hidesWaveform)
+                if self?.pendingStopForPresentation != true { self?.showCapsuleProgress(text, hidesWaveform: hidesWaveform) }
             },
             onDisplayText: { [weak self] text in
                 self?.updateCapsuleText(text)

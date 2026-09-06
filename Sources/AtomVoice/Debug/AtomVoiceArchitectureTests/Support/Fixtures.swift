@@ -81,7 +81,7 @@ func makeRecognitionSessionCallbacks(
 }
 
 final class RecordingSessionHarness {
-    let audioEngine = AudioEngineController()
+    let audioEngine = AudioEngineController(startOperationOverride: { true }, stopOperationOverride: {})
     let presenter = FakeRecordingSessionPresenter()
     let session: FakeRecognitionSession
     let provider = FakeASREngineProvider()
@@ -184,6 +184,7 @@ final class RecognitionFinalizerHarness {
     func finish(
         _ text: String,
         mode: RecognitionFinalizationMode = .normal,
+        engineCode: String = ASREngineRegistry.appleCode,
         errorMessage: String? = nil,
         liveInsertion: RecognitionLiveInsertionSnapshot = RecognitionLiveInsertionSnapshot(isActive: false, committedText: ""),
         streamSession: TextStreamSession? = nil
@@ -193,7 +194,7 @@ final class RecognitionFinalizerHarness {
                 recognizedText: text,
                 errorMessage: errorMessage,
                 mode: mode,
-                engineCode: ASREngineRegistry.appleCode,
+                engineCode: engineCode,
                 liveInsertion: liveInsertion,
                 streamSession: streamSession,
                 clearStreamSession: { [weak self] in self?.clearedStreamCount += 1 },

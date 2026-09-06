@@ -141,7 +141,14 @@ struct RecordingDeferredCapsuleState: Equatable {
     }
 }
 
+struct RecordingPreparationStop: Equatable {
+    let immediate: Bool
+    let punctuation: String?
+}
+
 struct RecordingSessionState: Equatable {
+    var recognitionReady = false
+    var preparationStop: RecordingPreparationStop?
     fileprivate(set) var phase: RecordingPhase = .idle
     var currentRecordingEngine = ASREngineRegistry.appleCode
     fileprivate(set) var recordingGeneration = 0
@@ -173,13 +180,16 @@ struct RecordingStateMachine {
 
         switch event {
         case .triggerPressed(let deferCapsulePresentation):
-            guard next.phase == .idle || next.phase == .refining || next.phase == .cancelled || next.phase == .errored else {
+            guard next.phase == .idle || next.phase == .refining || next.phase == .cancelled || next.phase == .errored || next.phase == .stopping else {
                 return (next, effects)
             }
+            next.recognitionReady = false
+            next.preparationStop = nil
             next.deferredCapsule.begin(deferred: deferCapsulePresentation)
             next.mutableCapsulePreviewEnabled = true
             next.phase = .starting
             next.startRequestGeneration += 1
+            next.recordingGeneration += 1
             effects.append(.waitForInputReady(request: next.startRequestGeneration))
 
         case .inputPreflightCompleted(let request, let ready):
@@ -231,7 +241,6 @@ struct RecordingStateMachine {
             }
             next.phase = .capturing
             next.currentRecordingEngine = engine
-            next.recordingGeneration += 1
             next.textOutputActivated = false
             next.liveInsertion.reset()
             effects.append(contentsOf: [
@@ -281,7 +290,7 @@ struct RecordingStateMachine {
             effects.append(.stopSession(generation: next.recordingGeneration, immediate: true, appending: punctuation))
 
         case .cancelRequested:
-            guard next.phase == .capturing || next.isRefining else {
+            guard next.phase == .capturing || next.phase == .stopping || next.isRefining else {
                 if next.phase == .starting {
                     next.phase = .cancelled
                     next.startRequestGeneration += 1
@@ -459,6 +468,8 @@ struct RecordingStateMachine {
 
 private extension RecordingSessionState {
     mutating func clearVolatileState() {
+        recognitionReady = false
+        preparationStop = nil
         isRefining = false
         isWaitingForDoubaoFinalResult = false
         pendingRefinementText = nil

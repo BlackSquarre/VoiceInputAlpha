@@ -15,7 +15,7 @@ enum ASRProviderTests {
             try expect(appleEngine === provider.appleEngine())
             try expect(appleEngine.recognizer === speechRecognizer)
         }
-        await runner.run("ASR provider releases local engine without model load") {
+        await runner.run("ASR provider preserves one runtime owner across asynchronous release") {
             let provider = ASREngineProvider()
             try expect(!provider.hasSherpaEngine)
             try expect(!provider.isSherpaModelLoaded)
@@ -26,11 +26,11 @@ enum ASRProviderTests {
             try expect(!provider.isSherpaModelLoaded)
 
             provider.releaseSherpaEngine()
-            try expect(!provider.hasSherpaEngine)
+            try expect(provider.hasSherpaEngine)
             try expect(!provider.isSherpaModelLoaded)
 
             let recreatedSherpaEngine = provider.sherpaEngine()
-            try expect(recreatedSherpaEngine !== sherpaEngine)
+            try expect(recreatedSherpaEngine === sherpaEngine)
         }
         await runner.run("ASR provider shares cloud engine instance") {
             let provider = ASREngineProvider()
@@ -60,7 +60,7 @@ enum ASRProviderTests {
             try expect(doubao.preferredAudioFormat == .voice16k)
             try expect(doubao.supportsServerFallback)
         }
-        await runner.run("ASR provider rebuilds Sherpa RecognitionSession on release") {
+        await runner.run("ASR provider retains Sherpa session across asynchronous release") {
             let provider = ASREngineProvider()
             let audioEngine = AudioEngineController()
 
@@ -68,7 +68,7 @@ enum ASRProviderTests {
             provider.releaseSherpaEngine()
             let recreated = provider.recognitionSession(for: ASREngineRegistry.sherpaCode, audioEngine: audioEngine)
 
-            try expect((session as AnyObject) !== (recreated as AnyObject))
+            try expect((session as AnyObject) === (recreated as AnyObject))
             try expect(!provider.isSherpaModelLoaded)
         }
         await runner.run("ASR registry normalizes unknown engine codes") {

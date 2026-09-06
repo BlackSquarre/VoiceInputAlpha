@@ -14,6 +14,13 @@ struct TextProcessingContext {
 protocol TextPostProcessor {
     var id: String { get }
     func tryProcess(_ text: String, context: TextProcessingContext) -> String?
+    func processAsync(_ text: String, context: TextProcessingContext, completion: @escaping (String?) -> Void)
+}
+
+extension TextPostProcessor {
+    func processAsync(_ text: String, context: TextProcessingContext, completion: @escaping (String?) -> Void) {
+        completion(tryProcess(text, context: context))
+    }
 }
 
 // 后处理器注册中心：按顺序遍历处理器，返回第一个非 nil 的结果；全部不适用时返回原文
@@ -23,6 +30,16 @@ final class TextPostProcessorRegistry {
 
     init(processors: [TextPostProcessor]) {
         self.processors = processors
+    }
+
+    func runAsync(_ text: String, context: TextProcessingContext, completion: @escaping (String) -> Void) {
+        func next(_ index: Int) {
+            guard index < processors.count else { completion(text); return }
+            processors[index].processAsync(text, context: context) { result in
+                if let result { completion(result) } else { next(index + 1) }
+            }
+        }
+        next(0)
     }
 
     func run(_ text: String, context: TextProcessingContext) -> String {
@@ -45,8 +62,10 @@ final class SherpaPunctuationProcessor: TextPostProcessor {
 
     private let registry: ASREngineRegistry
     private let punctuator: (String) -> String?
+    private let asyncPunctuator: ((String, @escaping (String?) -> Void) -> Void)?
 
-    init(registry: ASREngineRegistry, punctuator: @escaping (String) -> String?) {
+    init(registry: ASREngineRegistry, asyncPunctuator: ((String, @escaping (String?) -> Void) -> Void)? = nil, punctuator: @escaping (String) -> String?) {
+        self.asyncPunctuator = asyncPunctuator
         self.registry = registry
         self.punctuator = punctuator
     }
@@ -56,6 +75,13 @@ final class SherpaPunctuationProcessor: TextPostProcessor {
         guard registry.isSherpa(context.engineCode) else { return nil }
         guard Self.supportsLanguage(context.language) else { return nil }
         return punctuator(text)
+    }
+
+    func processAsync(_ text: String, context: TextProcessingContext, completion: @escaping (String?) -> Void) {
+        guard AppSettings.autoPunctuationEnabled, registry.isSherpa(context.engineCode),
+              Self.supportsLanguage(context.language) else { completion(nil); return }
+        if let asyncPunctuator { asyncPunctuator(text, completion) }
+        else { completion(punctuator(text)) }
     }
 
     private static func supportsLanguage(_ language: String) -> Bool {

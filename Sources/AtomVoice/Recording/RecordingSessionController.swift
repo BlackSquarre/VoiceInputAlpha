@@ -21,6 +21,20 @@ final class RecordingSessionController {
     private let recognitionFinalizer: RecognitionResultFinalizer
     private let liveInsertionAdapter = AppleLiveInsertionAdapter()
     var recognitionSession: (any RecognitionSession)?
+    var recordingAudioInput = RecordingAudioInput()
+    private var captureConsumerID: UUID?
+    var pendingStopForPresentation: Bool { pendingStop != nil }
+    private var captureEngineCode: String?
+    private var recognitionReady: Bool {
+        get { state.recognitionReady }
+        set { state.recognitionReady = newValue }
+    }
+    private var pendingStop: RecordingPreparationStop? {
+        get { state.preparationStop }
+        set { state.preparationStop = newValue }
+    }
+    private var captureRequestedAt = ProcessInfo.processInfo.systemUptime
+
     weak var delegate: RecordingSessionDelegate?
     #if DEBUG_BUILD
     private let audioEvidenceRecorder = DebugAudioEvidenceRecorder()
@@ -176,7 +190,7 @@ final class RecordingSessionController {
 
     /// 录音已经开始，或正在等待异步输入设备 preflight 完成。
     /// (Recording has started, or the async input preflight is still pending.)
-    var isRecordingOrStarting: Bool { isRecording || isStarting }
+    var isRecordingOrStarting: Bool { (isRecording || isStarting) && pendingStop == nil }
 
     /// 关闭错误胶囊（Dismiss the error capsule）
     func dismissError() { presenter.dismiss(completion: nil) }
@@ -273,35 +287,96 @@ final class RecordingSessionController {
     // MARK: - 录音启动（Recording start）
 
     private func startRecording(deferCapsulePresentation: Bool = false) {
+        if pendingStop != nil {
+            cancelRecording()
+            pendingStop = nil
+        }
         _ = dispatch(.triggerPressed(deferCapsulePresentation: deferCapsulePresentation))
     }
 
     func waitForInputReady(startRequest: Int) {
-        audioEngine.waitForInputReady(timeout: 0.5) { [weak self] ready in
-            guard let self else { return }
-            guard self.isStarting,
-                  self.startRequestGeneration == startRequest,
-                  !self.isRecording else { return }
-            self.dispatch(.inputPreflightCompleted(request: startRequest, ready: ready))
+        captureRequestedAt = ProcessInfo.processInfo.systemUptime
+        recordingAudioInput.cancel()
+        recordingAudioInput = RecordingAudioInput()
+        recognitionReady = false
+        pendingStop = nil
+        if let id = captureConsumerID { audioEngine.router.unregister(id) }
+        let input = recordingAudioInput
+        captureEngineCode = AppSettings.normalizedRecognitionEngine
+        let format: AudioRouter.ConsumerFormat? = captureEngineCode == ASREngineRegistry.appleCode ? nil : .voice16k
+        captureConsumerID = audioEngine.router.register(format: format) { buffer in input.accept(buffer) }
+        // 先提交收音，主线程随后立即呈现；磁盘预检和引擎准备均不占用这一入口。
+        audioEngine.start { [weak self] ready in
+            guard let self, self.state.acceptsStartRequest(startRequest) else { return }
+            DebugLog.info("[RecordingLatency] capture ready ms=\((ProcessInfo.processInfo.systemUptime - self.captureRequestedAt) * 1000)")
+            self.dispatch(.inputPreflightCompleted(request: startRequest, ready: ready || self.pendingStop != nil))
+            if !ready && self.pendingStop == nil {
+                self.stopCapture()
+                self.onRecordingStateChanged?(false)
+            }
         }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
+            guard let self, self.startRequestGeneration == startRequest,
+                  self.state.isRecordingOrStarting, !self.recognitionReady else { return }
+            self.stopCapture()
+            self.recordingAudioInput.cancel()
+            self.onRecordingStateChanged?(false)
+            if self.isStarting {
+                self.dispatch(.startPreflightFailed(message: loc("cloudASR.error.timeout"), ensurePanel: true))
+            } else {
+                self.dispatch(.sessionStartFailed(message: loc("cloudASR.error.timeout"), dismissAfter: 5,
+                                                 stopAudioEngine: true, recovery: nil))
+            }
+        }
+        onRecordingStateChanged?(true)
+        showInitialCapsule()
+        DebugLog.info("[RecordingLatency] initial UI submitted ms=\((ProcessInfo.processInfo.systemUptime - captureRequestedAt) * 1000)")
+    }
+
+    func stopCapture() {
+        recordingAudioInput.seal()
+        if let id = captureConsumerID {
+            audioEngine.router.unregister(id)
+            captureConsumerID = nil
+        }
+        audioEngine.stop()
+        audioEngine.releaseHardwareAfterIdle()
     }
 
     func continueStartRecording(startRequest: Int) {
         guard state.acceptsStartRequest(startRequest) else { return }
         // Sherpa 引擎：直接按当前 preset 实读磁盘判断；isReady 内部含一次轻量自愈
         // (Sherpa engine: read disk for current preset; isReady includes one lightweight self-heal pass)
-        let engine = AppSettings.normalizedRecognitionEngine
+        let engine = captureEngineCode ?? AppSettings.normalizedRecognitionEngine
         let selectedSession = recognitionSession(for: engine)
-        switch selectedSession.preflight() {
+        selectedSession.prepare { [weak self] result in
+            guard let self, self.state.acceptsStartRequest(startRequest) else { return }
+            self.completeStartPreflight(result, selectedSession: selectedSession)
+        }
+    }
+
+    private func completeStartPreflight(_ result: RecognitionSessionPreflightResult, selectedSession: any RecognitionSession) {
+        switch result {
         case .ready:
             break
         case .requestExternalDownload(let redownload):
+            stopCapture()
+            onRecordingStateChanged?(false)
+            recordingAudioInput.cancel()
+            presenter.dismiss(completion: nil)
             _ = dispatch(.externalModelDownloadRequired(redownload: redownload))
             return
         case .waitForExternalDownload:
+            stopCapture()
+            onRecordingStateChanged?(false)
+            recordingAudioInput.cancel()
+            presenter.dismiss(completion: nil)
             _ = dispatch(.externalModelDownloadInProgress)
             return
         case .failure(let error):
+            stopCapture()
+            onRecordingStateChanged?(false)
+            recordingAudioInput.cancel()
             _ = dispatch(.startPreflightFailed(message: error, ensurePanel: true))
             return
         }
@@ -310,6 +385,7 @@ final class RecordingSessionController {
             ? recognitionSession?.currentText.trimmingCharacters(in: .whitespacesAndNewlines)
             : nil
         let pendingRefinementText = state.isRefining ? state.pendingRefinementText : nil
+        if recognitionSession !== selectedSession { recognitionSession?.cancel() }
         recognitionSession = selectedSession
         _ = dispatch(
             .recognitionCapabilitiesResolved(
@@ -317,14 +393,14 @@ final class RecordingSessionController {
             )
         )
 
-        let lowerVolume = AppSettings.lowerVolumeOnRecording
+        let lowerVolume = AppSettings.lowerVolumeOnRecording && pendingStop == nil
         DebugLog.info("[Session] startRecording: lowerVolume=\(lowerVolume)")
         #if DEBUG_BUILD
         audioEvidenceRecorder.reset()
         #endif
         _ = dispatch(
             .startValidated(
-                engine: AppSettings.normalizedRecognitionEngine,
+                engine: selectedSession.code,
                 pendingDoubaoText: pendingDoubaoText,
                 pendingRefinementText: pendingRefinementText,
                 lowerVolume: lowerVolume
@@ -347,7 +423,13 @@ final class RecordingSessionController {
                           self.recordingGeneration == generation else { return }
                     switch result {
                     case .started:
-                        self.dispatch(.sessionStartCompleted(generation: generation))
+                        self.recognitionReady = true
+                        if let stop = self.pendingStop {
+                            self.pendingStop = nil
+                            self.completeDeferredStop(stop)
+                        } else {
+                            self.dispatch(.sessionStartCompleted(generation: generation))
+                        }
                     case .failed(let failure):
                         #if DEBUG_BUILD
                         self.preserveDebugAudioEvidence(reason: .sessionStartFailed)
@@ -356,7 +438,7 @@ final class RecordingSessionController {
                             .sessionStartFailed(
                                 message: failure.message,
                                 dismissAfter: failure.dismissAfter,
-                                stopAudioEngine: failure.stopAudioEngine,
+                                stopAudioEngine: true,
                                 recovery: failure.recovery.map {
                                     switch $0 {
                                     case .requestSherpaModelDownload(let redownload, let delay):
@@ -395,6 +477,11 @@ final class RecordingSessionController {
     // MARK: - 实时识别更新与状态（Real-time updates & state）
 
     private func cancelPendingStart() {
+        stopCapture()
+        onRecordingStateChanged?(false)
+        recordingAudioInput.cancel()
+        pendingStop = nil
+        presenter.dismiss(completion: nil)
         audioEngine.cancelInputReadinessCheck()
         _ = dispatch(.cancelRequested)
     }
@@ -423,11 +510,13 @@ final class RecordingSessionController {
     // MARK: - 录音收尾（Recording stop / cancel / immediate）
 
     private func stopRecording() {
+        if deferStopIfPreparing(immediate: false, punctuation: nil) { return }
         guard isRecording else {
             cancelPendingStart()
             resetDeferredCapsulePresentation()
             return
         }
+        stopCapture()
         _ = dispatch(.triggerReleased)
         // 停止键按下即收起胶囊（仅非 LLM 路径）：识别收尾与上屏在后台继续，给用户即时反馈。
         // 开 LLM 时保留胶囊，用于展示"优化中"与优化结果。
@@ -459,7 +548,7 @@ final class RecordingSessionController {
     }
 
     private func cancelRecording() {
-        guard isRecording || isRefining else {
+        guard isRecording || isRefining || state.phase == .stopping else {
             cancelPendingStart()
             resetDeferredCapsulePresentation()
             return
@@ -471,38 +560,48 @@ final class RecordingSessionController {
     /// Space/Backspace/标点立即上屏：停止录音，跳过 LLM，直接注入。
     /// (Space/Backspace/punctuation injects immediately: stop recording, skip LLM, inject directly.)
     private func stopRecordingImmediate(appending punctuation: String? = nil) {
+        if deferStopIfPreparing(immediate: true, punctuation: punctuation) { return }
         guard isRecording else {
             cancelPendingStart()
             resetDeferredCapsulePresentation()
             return
         }
+        stopCapture()
         _ = dispatch(.immediateStop(appending: punctuation))
         // 立即上屏路径跳过 LLM，延迟极短时间收起胶囊。
         // (Immediate-output path skips LLM; dismiss the capsule a tiny delay after stop.)
         scheduleCapsuleDismissAfterStop()
     }
 
+    private func deferStopIfPreparing(immediate: Bool, punctuation: String?) -> Bool {
+        guard state.isRecordingOrStarting, !recognitionReady else { return false }
+        pendingStop = RecordingPreparationStop(immediate: immediate, punctuation: punctuation)
+        stopCapture()
+        asrSilenceMonitor.stop()
+        onRecordingStateChanged?(false)
+        volumeController.restoreVolume()
+        presenter.dismiss(completion: nil)
+        return true
+    }
+
+    private func completeDeferredStop(_ stop: RecordingPreparationStop) {
+        dispatch(stop.immediate ? .immediateStop(appending: stop.punctuation) : .triggerReleased)
+    }
+
     func stopRecognitionSession(generation: Int, immediate: Bool, appending punctuation: String?) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self, let session = self.recognitionSession else { return }
-            session.stop(
-                immediate: immediate,
-                appending: punctuation,
-                callbacks: self.makeRecognitionSessionCallbacks(generation: generation)
-            ) { [weak self] result in
+        guard let session = recognitionSession else { return }
+        stopCapture()
+        let callbacks = makeRecognitionSessionCallbacks(generation: generation)
+        let stoppedAt = ProcessInfo.processInfo.systemUptime
+        recordingAudioInput.finish { [weak self] in
+            guard let self, self.recordingGeneration == generation else { return }
+            session.stop(immediate: immediate, appending: punctuation, callbacks: callbacks) { [weak self] result in
                 guard let self, self.recordingGeneration == generation else { return }
-                self.dispatch(
-                    .asrFinal(
-                        text: result.text,
-                        errorMessage: result.errorMessage,
-                        appending: result.appendingImmediatePunctuation
-                    )
-                )
-                self.finishRecognizedResult(
-                    result.text,
-                    errorMsg: result.errorMessage,
-                    appending: result.appendingImmediatePunctuation
-                )
+                DebugLog.info("[RecordingLatency] final decode ms=\((ProcessInfo.processInfo.systemUptime - stoppedAt) * 1000)")
+                self.dispatch(.asrFinal(text: result.text, errorMessage: result.errorMessage,
+                                       appending: result.appendingImmediatePunctuation))
+                self.finishRecognizedResult(result.text, errorMsg: result.errorMessage,
+                                            appending: result.appendingImmediatePunctuation)
             }
         }
     }

@@ -25,8 +25,10 @@ extension RecordingSessionController {
             stopRecognitionSession(generation: generation, immediate: immediate, appending: punctuation)
         case .cancelSession(let stopAudioEngine):
             recognitionSession?.cancel()
+            if state.phase != .capturing { recordingAudioInput.cancel() }
             if stopAudioEngine {
-                audioEngine.stop()
+                recordingAudioInput.cancel()
+                stopCapture()
                 audioEngine.releaseHardwareAfterIdle()
             }
         case .showCapsule(let presentation, let ensurePanel):
@@ -60,7 +62,7 @@ extension RecordingSessionController {
         case .extendSilenceMonitor(let duration):
             asrSilenceMonitor.extendTimeout(by: duration)
         case .notifyRecording(let active):
-            onRecordingStateChanged?(active)
+            onRecordingStateChanged?(active && !pendingStopForPresentation)
         case .notifyRefining(let active):
             onRefiningStateChanged?(active)
         case .noteASRText(let text):

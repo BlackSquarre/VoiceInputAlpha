@@ -6,7 +6,8 @@ final class VolumeController {
     private let decreaseRatio: Float = 0.2
     private let fadeDownDuration: TimeInterval = 0.3
     private let fadeUpDuration: TimeInterval = 0.5
-    private var fadeTimer: Timer?
+    private let queue = DispatchQueue(label: "com.atomvoice.volume", qos: .userInitiated)
+    private var fadeTimer: DispatchSourceTimer?
 
     // MARK: - CoreAudio 音量控制
 
@@ -86,69 +87,38 @@ final class VolumeController {
     // MARK: - 渐变控制
 
     private func stopFade() {
-        guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in
-                self?.stopFade()
-            }
-            return
-        }
-        fadeTimer?.invalidate()
+        fadeTimer?.cancel()
         fadeTimer = nil
     }
 
-    /// 启动一段渐变；只有自然跑完到 progress=1.0 才会触发 onComplete，
-    /// 中途被 stopFade 打断时 onComplete 不会触发。
-    /// (Run a fade; onComplete fires only if the fade reaches progress=1.0 naturally.
-    /// If interrupted by stopFade, onComplete is dropped.)
+    /// CoreAudio 查询和渐变全部在专用队列运行，避免蓝牙设备 IPC 阻塞录音 UI。
     private func startFade(from startVol: Float,
                            to targetVol: Float,
                            duration: TimeInterval,
                            onComplete: (() -> Void)? = nil) {
         stopFade()
-
-        let isDecreasing = startVol > targetVol
-
-        func scheduleTimer() {
-            let startTime = ProcessInfo.processInfo.systemUptime
-
-            fadeTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] timer in
-                guard self != nil else { timer.invalidate(); return }
-                let elapsed = ProcessInfo.processInfo.systemUptime - startTime
-                let progress = min(elapsed / duration, 1.0)
-
-                let t = progress
-                let eased: Double
-                if isDecreasing {
-                    // 降音量：easeOutCubic — 快速下降，缓停（Decrease volume: easeOutCubic — fast drop, gentle stop）
-                    let inv = 1.0 - t
-                    eased = 1.0 - inv * inv * inv
-                } else {
-                    // 升音量：easeInOutCubic — 平滑恢复（Increase volume: easeInOutCubic — smooth recovery）
-                    if t < 0.5 {
-                        eased = 4 * t * t * t
-                    } else {
-                        let inv = 1.0 - t
-                        eased = 1.0 - 2 * inv * inv * inv
-                    }
-                }
-
-                let vol = Float(Double(startVol) + Double(targetVol - startVol) * eased)
-                self?.setSystemVolume(vol)
-
-                if progress >= 1.0 {
-                    timer.invalidate()
-                    self?.fadeTimer = nil
-                    self?.setSystemVolume(targetVol)
-                    onComplete?()
-                }
+        let startTime = ProcessInfo.processInfo.systemUptime
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now(), repeating: 1.0 / 60.0, leeway: .milliseconds(2))
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            let progress = min((ProcessInfo.processInfo.systemUptime - startTime) / duration, 1.0)
+            let eased: Double
+            if startVol > targetVol {
+                eased = 1 - pow(1 - progress, 3)
+            } else if progress < 0.5 {
+                eased = 4 * progress * progress * progress
+            } else {
+                eased = 1 - 2 * pow(1 - progress, 3)
+            }
+            self.setSystemVolume(Float(Double(startVol) + Double(targetVol - startVol) * eased))
+            if progress >= 1 {
+                self.stopFade()
+                onComplete?()
             }
         }
-
-        if Thread.isMainThread {
-            scheduleTimer()
-        } else {
-            DispatchQueue.main.async { scheduleTimer() }
-        }
+        fadeTimer = timer
+        timer.resume()
     }
 
     /// 保存原始音量并平滑降低。
@@ -158,6 +128,10 @@ final class VolumeController {
     /// `savedVolume` still holds the true baseline. Do NOT re-capture the current
     /// (mid-fade) reading, otherwise the baseline drifts down geometrically.)
     func saveAndDecreaseVolume() {
+        queue.async { [self] in saveAndDecreaseOnQueue() }
+    }
+
+    private func saveAndDecreaseOnQueue() {
         let baseline: Float
         if let existing = savedVolume {
             baseline = existing
@@ -177,6 +151,10 @@ final class VolumeController {
     /// (Clear `savedVolume` only when the restore fade fully completes; if interrupted
     /// by another decrease, the baseline is preserved for the next restore.)
     func restoreVolume() {
+        queue.async { [self] in restoreOnQueue() }
+    }
+
+    private func restoreOnQueue() {
         guard let saved = savedVolume else { return }
         let current = getSystemVolume() ?? saved
         startFade(from: current, to: saved, duration: fadeUpDuration) { [weak self] in

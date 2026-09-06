@@ -49,7 +49,7 @@ final class AudioAnalyzer {
 
     /// 录音开始 / 结束时重置滚动状态（Clear rolling state on start/stop）
     func reset() {
-        bufferQueue.sync {
+        bufferQueue.async { [self] in
             sampleBuffer = []
         }
     }
